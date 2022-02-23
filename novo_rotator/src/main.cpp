@@ -1,26 +1,20 @@
-#include <Arduino.h>
 #include <Ethernet.h>
 #include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <helpers.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "grbl_talker.h"
+#include "../include/grbl_talker.h"
+#include "../include/helpers.h"
+#include "../include/lcd_control.h"
 
-#include "DFRobot_LCD.h"
-
-#define BUF_LEN 128
-#define LCDUPDATEFREQUENCY 1000
 #define TCPUPDATEFREQUENCY 100
-#define BTN_L 5
-#define BTN_C 6
-#define BTN_R A2
 #define ETH_CS 10
 #define SD_CS 4
+#define BUF_LEN 128
 
-DFRobot_LCD lcd(16, 2);  // 16 characters and 2 lines of show
+unsigned long destinationTimeS;
 
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
@@ -40,7 +34,6 @@ float rotations;
 unsigned long lastTick = 0;
 int tickCounter = 0;
 bool grblOkAwait = true;
-
 
 // settings
 byte rpm = 0;
@@ -82,40 +75,14 @@ void updateLCD() {
     }
 }
 
-void breath(unsigned char color) {
-    for (int i = 0; i < 255; i++) {
-        lcd.setPWM(color, i);
-        delay(5);
-    }
-
-    delay(500);
-    for (int i = 254; i >= 0; i--) {
-        lcd.setPWM(color, i);
-        delay(5);
-    }
-
-    delay(500);
-}
-
-
-
 void setup() {
-    // Setp pins
-
     Wire.begin();
-    // initialize LCD
-    lcd.init();
-    // Print a message to the LCD.
-    lcd.setCursor(1, 0);
-    lcd.print("Novo Rotator");
-    lcd.setCursor(3, 1);
-    lcd.print("FW: 0.0.1");
-    delay(2500);
-    lcd.clear();
-    lcd.print("Starting...");
-    lcd.setCursor(0, 1);
-    lcd.print("Serial          ");
     Serial.begin(115200);
+
+    // Initialize LCD screen
+    lcdInit();
+    btnsInit();
+
     // Open serial communications with grbl and wait for port to open:
     grbl_init();
 
@@ -144,14 +111,11 @@ void setup() {
         // lcd.print("2. is your wiring correct?");
         // lcd.print("3. did you change the chipSelect pin to match your shield or module?");
         // lcd.print("Note: press reset or reopen this Serial Monitor after fixing your issue!");
-        lcd.autoscroll();
-        delay(30000);
+        //lcd.autoscroll();
+        delay(3000);
     }
-    delay(2000);
-
-    lcd.setRGB(100, 100, 254);
-    lcd.clear();
-    lcd.write("Ready");
+    //delay(2000);
+    lcdStartMenu();    
 }
 
 void updateLED(int input) {
@@ -297,6 +261,10 @@ void ticker() {
 void loop() {
     ticker();
     grbl_sync();
+
+    btnLeftUpdate();
+    btnCenterUpdate();
+    btnRightUpdate();
     //updateLCD();
 
     // read tcp communication.
@@ -309,12 +277,11 @@ void loop() {
     // Only here if anything to read from eth port
     // Is there anything to read?
     if (client.available()) {
-        int bytesReceived = client.readBytesUntil('\n', inData, BUFFER_LENGTH);
+        int bytesReceived = client.readBytesUntil('\n', inData, BUF_LEN);
         inData[bytesReceived] = '\0';  // Null terminate the string.
     } else
         return;
 
     commandParser(&client);
-
 
 }
