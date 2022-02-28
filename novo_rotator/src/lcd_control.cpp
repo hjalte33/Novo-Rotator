@@ -1,11 +1,10 @@
 #include "../include/lcd_control.h"
 
 // Button pins
-static const byte btnLeftPin = 2;
-static const byte btnCenterPin = 18;
-static const byte btnRightPin = 19;
+static const byte btnLeftPin = 5;
+static const byte btnCenterPin = 6;
+static const byte btnRightPin = 7;
 
-static const int buttonInterval = 300; // number of millisecs between button readings
 unsigned long previousButtonMillisLeft = 0; // time when button press last checked
 unsigned long previousButtonMillisCenter = 0; // time when button press last checked
 unsigned long previousButtonMillisRight = 0; // time when button press last checked
@@ -17,9 +16,11 @@ volatile byte btnRightState = LOW; //Button flag, HIGH = pressed, LOW = not pres
 // Menu state
 byte lcdMenuState = 0;
 byte programSelected = -1;
+byte programNameDisplayed = HIGH;
 
-// LCD variable
+// LCD variables
 DFRobot_LCD lcd(16,2);
+unsigned long previousLcdMillis = 0;
 
 // Symbol defs
 byte symbolArrowRight[8] = {
@@ -42,6 +43,9 @@ byte symbolArrowLeft[8] = {
   B00000,
   B00000
 };
+
+// SD card program description variables
+unsigned int testRPM = 30, testTime = 150;
 
 void lcdInit()
 {
@@ -84,21 +88,21 @@ void lcdStartMenu()
 }
 
 void btnLeftPress() {
-  if (millis() - previousButtonMillisLeft >= buttonInterval) {
+  if (millis() - previousButtonMillisLeft >= BUTTONUPDATEFREQ) {
       btnLeftState = HIGH;
     }
    previousButtonMillisLeft = millis();
   }
   
 void btnCenterPress() {
-  if (millis() - previousButtonMillisCenter >= buttonInterval) {
+  if (millis() - previousButtonMillisCenter >= BUTTONUPDATEFREQ) {
       btnCenterState = HIGH;
     }
    previousButtonMillisCenter = millis();
   }
 
 void btnRightPress() {
-  if (millis() - previousButtonMillisRight >= buttonInterval) {
+  if (millis() - previousButtonMillisRight >= BUTTONUPDATEFREQ) {
       btnRightState = HIGH;
     }
    previousButtonMillisRight = millis();
@@ -146,6 +150,8 @@ void btnLeftUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 5   ");
+      programNameDisplayed = HIGH;
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P1:
       lcdMenuState = LCD_Selected_ProgramSelect_P0;
@@ -166,6 +172,8 @@ void btnLeftUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 1   ");
+      programNameDisplayed = HIGH;
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P3:
       lcdMenuState = LCD_Selected_ProgramSelect_P2;
@@ -176,6 +184,8 @@ void btnLeftUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 2   ");
+      programNameDisplayed = HIGH;
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P4:
       lcdMenuState = LCD_Selected_ProgramSelect_P3;
@@ -186,6 +196,7 @@ void btnLeftUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 3   ");
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P5:
       lcdMenuState = LCD_Selected_ProgramSelect_P4;
@@ -196,6 +207,8 @@ void btnLeftUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 4   ");
+      programNameDisplayed = HIGH;
+      previousLcdMillis = millis();
       break;
     }
     btnLeftState = btnCenterState = btnRightState = LOW;
@@ -244,6 +257,8 @@ void btnRightUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 1   ");
+      programNameDisplayed = HIGH;
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P1:
       lcdMenuState = LCD_Selected_ProgramSelect_P2;
@@ -254,6 +269,8 @@ void btnRightUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 2   ");
+      programNameDisplayed = HIGH;
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P2:
       lcdMenuState = LCD_Selected_ProgramSelect_P3;
@@ -264,6 +281,7 @@ void btnRightUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 3   ");
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P3:
       lcdMenuState = LCD_Selected_ProgramSelect_P4;
@@ -274,6 +292,8 @@ void btnRightUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 4   ");
+      programNameDisplayed = HIGH;
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P4:
       lcdMenuState = LCD_Selected_ProgramSelect_P5;
@@ -284,6 +304,7 @@ void btnRightUpdate() {
       lcd.write(2);
       lcd.setCursor(1,1);
       lcd.print("  Program 5   ");
+      previousLcdMillis = millis();
       break;
     case LCD_Selected_ProgramSelect_P5:
       lcdMenuState = LCD_Selected_ProgramSelect_P0;
@@ -321,4 +342,68 @@ void btnCenterUpdate() {
     }
     btnLeftState = btnCenterState = btnRightState = LOW;
   }
+}
+
+void lcdUpdate()
+{
+  if (millis() - previousLcdMillis >= LCDUPDATEFREQ) {
+    switch (lcdMenuState)
+    {
+    case LCD_Selected_ProgramSelect_P1:
+      if(programNameDisplayed == HIGH)
+      {
+        String printString;
+        lcd.clear();
+        lcd.setCursor(1,0);
+        lcd.write(1);
+        printString = String(" RPM:   ") + String(testRPM) + String("  ");
+        lcd.print(printString);
+        lcd.write(2);
+        lcd.setCursor(1,1);
+        printString = String("  Time:  ") + String(testTime) + String("  ");
+        lcd.print(printString);
+        programNameDisplayed = LOW;
+      }
+      else
+      {
+        lcd.clear();
+        lcd.setCursor(1,0);
+        lcd.write(1);
+        lcd.print(" Selecting: ");
+        lcd.write(2);
+        lcd.setCursor(1,1);
+        lcd.print("  Program 1   ");
+        programNameDisplayed = HIGH;
+      }
+      break;
+    case LCD_Selected_ProgramSelect_P2:
+      if(programNameDisplayed == HIGH)
+      {
+        String printString;
+        lcd.clear();
+        lcd.setCursor(1,0);
+        lcd.write(1);
+        printString = String(" RPM:   ") + String(testRPM*2) + String("  ");
+        lcd.print(printString);
+        lcd.write(2);
+        lcd.setCursor(1,1);
+        printString = String("  Time:  ") + String(testTime+10) + String("  ");
+        lcd.print(printString);
+        programNameDisplayed = LOW;
+      }
+      else
+      {
+        lcd.clear();
+        lcd.setCursor(1,0);
+        lcd.write(1);
+        lcd.print(" Selecting: ");
+        lcd.write(2);
+        lcd.setCursor(1,1);
+        lcd.print("  Program 1   ");
+        programNameDisplayed = HIGH;
+      }
+      break;
+    }
+    previousLcdMillis = millis(); 
+    }
 }

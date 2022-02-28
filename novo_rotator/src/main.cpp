@@ -43,7 +43,7 @@ unsigned long consumedTime = 0;
 
 unsigned long lastLCDUpdate = 0;
 void updateLCD() {
-    if (millis() < lastLCDUpdate + LCDUPDATEFREQUENCY)
+    if (millis() < lastLCDUpdate + LCDUPDATEFREQ)
         return;
     lastLCDUpdate = millis();
 
@@ -265,6 +265,7 @@ void loop() {
     btnLeftUpdate();
     btnCenterUpdate();
     btnRightUpdate();
+    lcdUpdate();
     //updateLCD();
 
     // read tcp communication.

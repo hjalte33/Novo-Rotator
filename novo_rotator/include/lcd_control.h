@@ -5,7 +5,8 @@
 #include <Arduino.h>
 #include "DFRobot_LCD.h"
 
-#define LCDUPDATEFREQUENCY 1000
+#define LCDUPDATEFREQ 2500 //number of milisec between LCD updates
+#define BUTTONUPDATEFREQ 300 //number of millisecs between button readings
 
 #define LCD_Menu_Info 0
 #define LCD_Menu_StartStop 1
@@ -31,5 +32,6 @@ void btnRightPress();
 void btnLeftUpdate();
 void btnCenterUpdate();
 void btnRightUpdate();
+void lcdUpdate();
 
 #endif
