@@ -88,25 +88,25 @@ void lcdStartMenu()
 }
 
 void btnLeftPress() {
-  if (millis() - previousButtonMillisLeft >= BUTTONUPDATEFREQ) {
-      btnLeftState = HIGH;
+    if (millis() - previousButtonMillisLeft >= BUTTONUPDATEFREQ) {
+        btnLeftState = HIGH;
+        previousButtonMillisLeft = millis();
     }
-   previousButtonMillisLeft = millis();
-  }
-  
+}
+
 void btnCenterPress() {
-  if (millis() - previousButtonMillisCenter >= BUTTONUPDATEFREQ) {
-      btnCenterState = HIGH;
+    if (millis() - previousButtonMillisCenter >= BUTTONUPDATEFREQ) {
+        btnCenterState = HIGH;
+        previousButtonMillisCenter = millis();
     }
-   previousButtonMillisCenter = millis();
-  }
+}
 
 void btnRightPress() {
-  if (millis() - previousButtonMillisRight >= BUTTONUPDATEFREQ) {
-      btnRightState = HIGH;
+    if (millis() - previousButtonMillisRight >= BUTTONUPDATEFREQ) {
+        btnRightState = HIGH;
+        previousButtonMillisRight = millis();
     }
-   previousButtonMillisRight = millis();
-  }
+}
 
 void btnLeftUpdate() {
   if (btnLeftState == HIGH)

@@ -78,7 +78,6 @@ void updateLCD() {
 void setup() {
     Wire.begin();
     Serial.begin(115200);
-
     // Initialize LCD screen
     lcdInit();
     btnsInit();
@@ -95,7 +94,7 @@ void setup() {
     
     if (Ethernet.linkStatus() == LinkOFF) {
         lcd.println("No eth cable    ");
-        delay(3000);
+        delay(2000);
     }
     // start the server
     ethServer.begin();
@@ -112,7 +111,7 @@ void setup() {
         // lcd.print("3. did you change the chipSelect pin to match your shield or module?");
         // lcd.print("Note: press reset or reopen this Serial Monitor after fixing your issue!");
         //lcd.autoscroll();
-        delay(3000);
+        delay(2000);
     }
     //delay(2000);
     lcdStartMenu();    
@@ -189,11 +188,13 @@ bool commandParser(EthernetClient *client) {
                     if(inData[2] == '~') {messageDismissed = true;}
                     else if(inData[2] != '=') {return false;}
                     else {strcpy(&inData[3],message); messageDismissed=false;}
+                    client->println("ok");
                     break;
                 case 'R':
                    grbl_reset(); // ctrl+c means reset grbl.
                    break;
                 default:
+                    client->println("error");
                     return false;
                     break;
             }
@@ -234,7 +235,7 @@ bool commandParser(EthernetClient *client) {
             }
         }
     }// end while
-    client->println("got it");
+    client->println("ok");
     return true;
 
 }  // end commandParser
