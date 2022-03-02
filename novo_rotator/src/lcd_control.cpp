@@ -1,4 +1,5 @@
 #include "../include/lcd_control.h"
+#include "../include/program_loader.h"
 
 // Button pins
 static const byte btnLeftPin = 5;
@@ -174,14 +175,18 @@ void btnLeftUpdate()
     }
     case LCD_Selected_ProgramSelect_P0:
     {
-      lcdMenuState = LCD_Selected_ProgramSelect_P5;
+      //lcdMenuState = LCD_Selected_ProgramSelect_P5;
+
+      programSelected = String(get_prev_file_name());
+      break;
+
       lcd.clear();
       lcd.setCursor(1, 0);
       lcd.write(1);
       lcd.print(" Selecting: ");
       lcd.write(2);
       lcd.setCursor(1, 1);
-      lcd.print("  Program 5   ");
+      lcd.print(programSelected);
       lcdDisplayFlip = HIGH;
       previousLcdMillis = millis();
       break;
@@ -326,17 +331,20 @@ void btnRightUpdate()
     }
     case LCD_Selected_ProgramSelect_P0:
     {
-      lcdMenuState = LCD_Selected_ProgramSelect_P1;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 1   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
+        programSelected = String(get_next_file_name());
+        break;
+
+        lcd.clear();
+        lcd.setCursor(1, 0);
+        lcd.write(1);
+        lcd.print(" Selecting: ");
+        lcd.write(2);
+        lcd.setCursor(1, 1);
+        lcd.print(programSelected);
+        lcdDisplayFlip = HIGH;
+        previousLcdMillis = millis();
+        break;
+
     }
     case LCD_Selected_ProgramSelect_P1:
     {
@@ -492,7 +500,7 @@ void btnCenterUpdate()
     case LCD_Selected_ProgramSelect_P0:
     {
       lcdMenuState = LCD_Menu_StartStop;
-      programSelected = String("     Custom    ");
+      //programSelected = String("     Custom    ");
       lcdStartingStopping = LCD_SS_SelectedIdle;
       lcd.clear();
       lcd.setCursor(1, 0);
@@ -501,6 +509,7 @@ void btnCenterUpdate()
       lcd.write(2);
       lcd.setCursor(0, 1);
       lcd.print(programSelected);
+      //set_program(programSelected);
       break;
     }
     case LCD_Selected_ProgramSelect_P1:
