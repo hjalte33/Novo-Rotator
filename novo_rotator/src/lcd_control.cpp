@@ -118,14 +118,28 @@ void btnLeftUpdate()
     {
     case LCD_Menu_Info:
     {
-      lcdMenuState = LCD_Menu_ProgramSelect;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("   Program  ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("    Select    ");
+      if (lcdStartingStopping == LCD_SS_SelectedIdle || lcdStartingStopping == LCD_SS_Unselected)
+      {
+        lcdMenuState = LCD_Menu_ProgramSelect;
+        lcd.clear();
+        lcd.setCursor(1, 0);
+        lcd.write(1);
+        lcd.print("   Program  ");
+        lcd.write(2);
+        lcd.setCursor(1, 1);
+        lcd.print("    Select    ");
+      }
+      else if (lcdStartingStopping == LCD_SS_SelectedActive)
+      {
+        lcdMenuState = LCD_Menu_StartStop;
+        lcd.clear();
+        lcd.setCursor(1, 0);
+        lcd.write(1);
+        lcd.print("    Stop    ");
+        lcd.write(2);
+        lcd.setCursor(0, 1);
+        lcd.print(programSelected);
+      }
       break;
     }
     case LCD_Menu_ProgramSelect:
@@ -319,14 +333,27 @@ void btnRightUpdate()
     }
     case LCD_Menu_StartStop:
     {
-      lcdMenuState = LCD_Menu_ProgramSelect;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("   Program  ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("    Select    ");
+      if (lcdStartingStopping == LCD_SS_SelectedIdle || lcdStartingStopping == LCD_SS_Unselected)
+      {
+        lcdMenuState = LCD_Menu_ProgramSelect;
+        lcd.clear();
+        lcd.setCursor(1, 0);
+        lcd.write(1);
+        lcd.print("   Program  ");
+        lcd.write(2);
+        lcd.setCursor(1, 1);
+        lcd.print("    Select    ");
+      }
+      else if (lcdStartingStopping == LCD_SS_SelectedActive)
+      {
+        lcdMenuState = LCD_Menu_Info;
+        lcd.clear();
+        lcd.setCursor(1, 0);
+        lcd.write(1);
+        lcd.print("    Info    ");
+        lcd.write(2);
+        break;
+      }
       break;
     }
     case LCD_Selected_ProgramSelect_P0:
