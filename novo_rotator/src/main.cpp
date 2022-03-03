@@ -7,9 +7,8 @@
 
 #include "../include/grbl_talker.h"
 #include "../include/helpers.h"
-#include "../include/lcd_control.h"
+#include "../include/navigator.h"
 
-#define TCPUPDATEFREQUENCY 100
 #define ETH_CS 10
 #define SD_CS 4
 #define BUF_LEN 128
@@ -41,81 +40,7 @@ unsigned long destinationTime = 0;
 unsigned long consumedTime = 0;
 
 
-unsigned long lastLCDUpdate = 0;
-void updateLCD() {
-    if (millis() < lastLCDUpdate + LCDUPDATEFREQ)
-        return;
-    lastLCDUpdate = millis();
 
-    switch (grbl_state) {
-        case STATE_ALARM:
-            lcd.setCursor(0, 0);
-            lcd.println("Err             ");
-            lcd.setCursor(0, 1);
-            lcd.println("                ");
-            lcd.setRGB(255, 10, 10);
-            break;
-        case STATE_IDLE:
-            lcd.setCursor(0, 0);
-            lcd.println("Idle            ");
-            lcd.setCursor(0, 1);
-            lcd.println("                ");
-            lcd.setRGB(50, 50, 255);
-            break;
-        case STATE_CYCLE:
-            lcd.setCursor(0, 0);
-            lcd.print("Run  t=");
-            lcd.print(consumedTime);
-            lcd.setCursor(0, 1);
-            lcd.println("                ");
-            lcd.setRGB(50, 255, 50);
-            break;
-        default:
-            break;
-    }
-}
-
-void setup() {
-    Wire.begin();
-    Serial.begin(115200);
-    // Initialize LCD screen
-    lcdInit();
-    btnsInit();
-
-    // Open serial communications with grbl and wait for port to open:
-    grbl_init();
-
-    lcd.setCursor(0, 1);
-    lcd.print("Ethernet        ");
-    // start the Ethernet connection and the server:
-    Ethernet.begin(mac, ip, gateway, gateway, subnet);
-    Ethernet.init(ETH_CS);  // ethernet shield activation pin.
-
-    
-    if (Ethernet.linkStatus() == LinkOFF) {
-        lcd.println("No eth cable    ");
-        delay(2000);
-    }
-    // start the server
-    ethServer.begin();
-
-    lcd.clear();
-    lcd.setCursor(0, 1);
-    lcd.print("SD card reader  ");
-
-    if (!SD.begin(SD_CS)) {
-        lcd.clear();
-        lcd.print("initialization failed");
-        // lcd.print("1. is a card inserted?");
-        // lcd.print("2. is your wiring correct?");
-        // lcd.print("3. did you change the chipSelect pin to match your shield or module?");
-        // lcd.print("Note: press reset or reopen this Serial Monitor after fixing your issue!");
-        //lcd.autoscroll();
-        delay(2000);
-    }
-    //delay(2000);
-    lcdStartMenu();    
-}
 
 void updateLED(int input) {
     if (input) {
@@ -259,15 +184,43 @@ void ticker() {
     }
 }
 
+
+void setup() {
+    Wire.begin();
+    Serial.begin(115200);
+    // Initialize LCD screen
+    lcdInit();
+    btnsInit();
+
+    // Open serial communications with grbl and wait for port to open:
+    grbl_init();
+
+    lcd.setCursor(0, 1);
+    lcd.print("Ethernet        ");
+    // start the Ethernet connection and the server:
+    Ethernet.begin(mac, ip, gateway, gateway, subnet);
+    Ethernet.init(ETH_CS);  // ethernet shield activation pin.
+
+    
+    if (Ethernet.linkStatus() == LinkOFF) {
+        lcd.println("No eth cable    ");
+        delay(2000);
+    }
+    // start the server
+    ethServer.begin();
+
+    lcd.clear();
+    lcd.setCursor(0, 1);
+    lcd.print("SD card reader  ");
+    SD_init(SD_CS);
+
+}
+
 void loop() {
     ticker();
     grbl_sync();
 
-    btnLeftUpdate();
-    btnCenterUpdate();
-    btnRightUpdate();
-    lcdUpdate();
-    //updateLCD();
+    navigator_update();
 
     // read tcp communication.
     // Wait for an incomming connection

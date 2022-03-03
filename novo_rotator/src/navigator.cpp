@@ -1,18 +1,20 @@
-#include "../include/lcd_control.h"
-#include "../include/program_loader.h"
+#include <SD.h>
+
+#include "../include/navigator.h"
 
 // Button pins
 static const byte btnLeftPin = 5;
 static const byte btnCenterPin = 6;
 static const byte btnRightPin = 7;
 
-unsigned long previousButtonMillisLeft = 0;   // time when button press last checked
-unsigned long previousButtonMillisCenter = 0; // time when button press last checked
-unsigned long previousButtonMillisRight = 0;  // time when button press last checked
+unsigned long previousButtonMillisLeft = 0;    // time when button press last checked
+unsigned long previousButtonMillisCenter = 0;  // time when button press last checked
+unsigned long previousButtonMillisRight = 0;   // time when button press last checked
 
-volatile byte btnLeftState = LOW;   //Button flag, HIGH = pressed, LOW = not pressed.
-volatile byte btnCenterState = LOW; //Button flag, HIGH = pressed, LOW = not pressed.
-volatile byte btnRightState = LOW;  //Button flag, HIGH = pressed, LOW = not pressed.
+bool was_left_pressed = false;    // Button flag
+bool was_center_pressed = false;  // Button flag
+bool was_right_pressed = false;   // Button flag
+
 
 // Menu state
 byte lcdMenuState, lcdDisplayFlip, lcdStartingStopping;
@@ -46,791 +48,415 @@ byte symbolArrowLeft[8] = {
 unsigned int testRPM = 30, testTime = 150;
 long timeElapsed = -1, timeInitiated = -1;
 
-void lcdInit()
-{
-  // Initialize LCD
-  lcd.init();
-  lcd.customSymbol(2, symbolArrowRight);
-  lcd.customSymbol(1, symbolArrowLeft);
-  lcdMenuState = LCD_Menu_Info;
-  lcdStartingStopping = LCD_SS_Unselected;
-  byte lcdDisplayFlip = HIGH;
-  programSelected = String("       --       ");
-  // Print a message to the LCD.
-  /*
-    lcd.setCursor(1, 0);
-    lcd.print("Novo Rotator");
-    lcd.setCursor(3, 1);
-    lcd.print("FW: 0.0.1");
-    delay(2500);
-    lcd.clear();
-    lcd.print("Starting...");
-    lcd.setCursor(0, 1);
-    lcd.print("Serial          ");
-    */
+void lcdInit() {
+    // Initialize LCD
+    lcd.init();
+    lcd.customSymbol(2, symbolArrowRight);
+    lcd.customSymbol(1, symbolArrowLeft);
+    lcdMenuState = LCD_Menu_Info;
+    lcdStartingStopping = LCD_SS_Unselected;
+    byte lcdDisplayFlip = true;
+    programSelected = String("       --       ");
+    // Print a message to the LCD.
+    /*
+      lcd.setCursor(1, 0);
+      lcd.print("Novo Rotator");
+      lcd.setCursor(3, 1);
+      lcd.print("FW: 0.0.1");
+      delay(2500);
+      lcd.clear();
+      lcd.print("Starting...");
+      lcd.setCursor(0, 1);
+      lcd.print("Serial          ");
+      */
 }
 
-void btnsInit()
-{
-  pinMode(btnLeftPin, INPUT_PULLUP);
-  pinMode(btnCenterPin, INPUT_PULLUP);
-  pinMode(btnRightPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(btnLeftPin), ISR_btnLeftPress, FALLING);
-  attachInterrupt(digitalPinToInterrupt(btnCenterPin), ISR_btnCenterPress, FALLING);
-  attachInterrupt(digitalPinToInterrupt(btnRightPin), ISR_btnRightPress, FALLING);
+void btnsInit() {
+    pinMode(btnLeftPin, INPUT_PULLUP);
+    pinMode(btnCenterPin, INPUT_PULLUP);
+    pinMode(btnRightPin, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(btnLeftPin), ISR_btnLeftPress, FALLING);
+    attachInterrupt(digitalPinToInterrupt(btnCenterPin), ISR_btnCenterPress, FALLING);
+    attachInterrupt(digitalPinToInterrupt(btnRightPin), ISR_btnRightPress, FALLING);
 }
-
-void lcdStartMenu()
-{
-  lcd.clear();
-  lcd.setCursor(1, 0);
-  lcd.write(1);
-  lcd.print("    Info    ");
-  lcd.write(2);
-}
-
-void btnLeftPress() {
+void ISR_btnLeftPress() {
     if (millis() - previousButtonMillisLeft >= BUTTONUPDATEFREQ) {
-        btnLeftState = HIGH;
+        was_left_pressed = true;
         previousButtonMillisLeft = millis();
     }
 }
-
-void btnCenterPress() {
+void ISR_btnCenterPress() {
     if (millis() - previousButtonMillisCenter >= BUTTONUPDATEFREQ) {
-        btnCenterState = HIGH;
+        was_center_pressed = true;
         previousButtonMillisCenter = millis();
     }
 }
-
-void btnRightPress() {
+void ISR_btnRightPress() {
     if (millis() - previousButtonMillisRight >= BUTTONUPDATEFREQ) {
-        btnRightState = HIGH;
+        was_right_pressed = true;
         previousButtonMillisRight = millis();
     }
 }
 
-void btnLeftUpdate()
-{
-  if (btnLeftState == HIGH)
-  {
-    switch (lcdMenuState)
-    {
-    case LCD_Menu_Info:
-    {
-      if (lcdStartingStopping == LCD_SS_SelectedIdle || lcdStartingStopping == LCD_SS_Unselected)
-      {
-        lcdMenuState = LCD_Menu_ProgramSelect;
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("   Program  ");
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print("    Select    ");
-      }
-      else if (lcdStartingStopping == LCD_SS_SelectedActive)
-      {
-        lcdMenuState = LCD_Menu_StartStop;
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("    Stop    ");
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        lcd.print(programSelected);
-      }
-      break;
-    }
-    case LCD_Menu_ProgramSelect:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      if (lcdStartingStopping == LCD_SS_Unselected)
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print(" Start/Stop ");
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        lcd.print(programSelected);
-      }
-      else if (lcdStartingStopping == LCD_SS_SelectedIdle)
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("    Start   ");
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        lcd.print(programSelected);
-      }
-      else if (lcdStartingStopping == LCD_SS_SelectedActive)
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("    Stop    ");
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        lcd.print(programSelected);
-      }
-      break;
-    }
-    case LCD_Menu_StartStop:
-    {
-      lcdMenuState = LCD_Menu_Info;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Info    ");
-      lcd.write(2);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P0:
-    {
-      //lcdMenuState = LCD_Selected_ProgramSelect_P5;
-
-      programSelected = String(get_prev_file_name());
-      break;
-
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print(programSelected);
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P1:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P0;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("   Custom     ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P2:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P1;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 1   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P3:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P2;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 2   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P4:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P3;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 3   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P5:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P4;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 4   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    }
-    btnLeftState = btnCenterState = btnRightState = LOW;
-  }
+void draw_menu_info() {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.write(1);
+    lcd.print("     Info     ");
+    lcd.write(2);
 }
-
-void btnRightUpdate()
-{
-  if (btnRightState == HIGH)
-  {
-    switch (lcdMenuState)
-    {
-    case LCD_Menu_Info:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      if (lcdStartingStopping == LCD_SS_Unselected)
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print(" Start/Stop ");
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        lcd.print(programSelected);
-      }
-      else if (lcdStartingStopping == LCD_SS_SelectedIdle)
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("    Start   ");
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        lcd.print(programSelected);
-      }
-      else if (lcdStartingStopping == LCD_SS_SelectedActive)
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("    Stop    ");
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        lcd.print(programSelected);
-      }
-      break;
-    }
-    case LCD_Menu_ProgramSelect:
-    {
-      lcdMenuState = LCD_Menu_Info;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Info    ");
-      lcd.write(2);
-      break;
-    }
-    case LCD_Menu_StartStop:
-    {
-      if (lcdStartingStopping == LCD_SS_SelectedIdle || lcdStartingStopping == LCD_SS_Unselected)
-      {
-        lcdMenuState = LCD_Menu_ProgramSelect;
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("   Program  ");
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print("    Select    ");
-      }
-      else if (lcdStartingStopping == LCD_SS_SelectedActive)
-      {
-        lcdMenuState = LCD_Menu_Info;
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print("    Info    ");
-        lcd.write(2);
-        break;
-      }
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P0:
-    {
-        programSelected = String(get_next_file_name());
-        break;
-
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print(" Selecting: ");
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print(programSelected);
-        lcdDisplayFlip = HIGH;
-        previousLcdMillis = millis();
-        break;
-
-    }
-    case LCD_Selected_ProgramSelect_P1:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P2;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 2   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P2:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P3;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 3   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P3:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P4;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 4   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P4:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P5;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("  Program 5   ");
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P5:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P0;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("   Custom     ");
-      break;
-    }
-    }
-    btnLeftState = btnCenterState = btnRightState = LOW;
-  }
+void draw_menu_program_select() {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.write(1);
+    lcd.print("    Program   ");
+    lcd.write(2);
+    lcd.setCursor(0, 1);
+    lcd.print("     Select     ");
 }
-
-void btnCenterUpdate()
-{
-  if (btnCenterState == HIGH)
-  {
-    switch (lcdMenuState)
-    {
-    case LCD_Menu_Info:
-    {
-      String printString;
-      lcdMenuState = LCD_Selected_Info;
-      if (timeElapsed == -1)
-      {
-        printString = String("       --       ");
-      }
-      else
-      {
-        printString = String("   ") + String((millis() - timeElapsed) / 1000) + String("s/") + String(testTime) + String("s ");
-      }
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.print(" Time elapsed:  ");
-      lcd.setCursor(0, 1);
-      lcd.print(printString);
-      lcdDisplayFlip = HIGH;
-      previousLcdMillis = millis();
-      break;
-    }
-    case LCD_Menu_StartStop:
-    {
-      if (lcdStartingStopping == LCD_SS_SelectedIdle)
-      {
-        lcdMenuState = LCD_Starting;
-        lcdStartingStopping = LCD_SS_SelectedActive;
-        timeElapsed = millis();
+void draw_menu_start_stop() {
+    if (lcdStartingStopping == LCD_SS_Unselected) {
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("    Starting    ");
+        lcd.write(1);
+        lcd.print("  Start/Stop  ");
+        lcd.write(2);
         lcd.setCursor(0, 1);
-        lcd.print("   Program...   ");
-        previousLcdMillis = millis();
-      }
-      else if (lcdStartingStopping == LCD_SS_SelectedActive)
-      {
-        lcdMenuState = LCD_Stopping;
-        lcdStartingStopping = LCD_SS_SelectedIdle;
-        timeElapsed = -1;
+        lcd.print(programSelected);
+    } else if (lcdStartingStopping == LCD_SS_SelectedIdle) {
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("    Stopping    ");
+        lcd.write(1);
+        lcd.print("     Start    ");
+        lcd.write(2);
         lcd.setCursor(0, 1);
-        lcd.print("   Program...   ");
-        previousLcdMillis = millis();
-      }
-      break;
+        lcd.print(programSelected);
+    } else if (lcdStartingStopping == LCD_SS_SelectedActive) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.write(1);
+        lcd.print("     Stop     ");
+        lcd.write(2);
+        lcd.setCursor(0, 1);
+        lcd.print(programSelected);
     }
-    case LCD_Menu_ProgramSelect:
-    {
-      lcdMenuState = LCD_Selected_ProgramSelect_P0;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print(" Selecting: ");
-      lcd.write(2);
-      lcd.setCursor(1, 1);
-      lcd.print("   Custom     ");
-      lcdDisplayFlip = HIGH;
-      break;
-    }
-    case LCD_Selected_Info:
-    {
-      lcdMenuState = LCD_Menu_Info;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Info    ");
-      lcd.write(2);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P0:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      //programSelected = String("     Custom    ");
-      lcdStartingStopping = LCD_SS_SelectedIdle;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Start   ");
-      lcd.write(2);
-      lcd.setCursor(0, 1);
-      lcd.print(programSelected);
-      //set_program(programSelected);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P1:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      programSelected = String("   Program 1   ");
-      lcdStartingStopping = LCD_SS_SelectedIdle;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Start   ");
-      lcd.write(2);
-      lcd.setCursor(0, 1);
-      lcd.print(programSelected);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P2:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      programSelected = String("   Program 2   ");
-      lcdStartingStopping = LCD_SS_SelectedIdle;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Start   ");
-      lcd.write(2);
-      lcd.setCursor(0, 1);
-      lcd.print(programSelected);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P3:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      programSelected = String("   Program 3   ");
-      lcdStartingStopping = LCD_SS_SelectedIdle;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Start   ");
-      lcd.write(2);
-      lcd.setCursor(0, 1);
-      lcd.print(programSelected);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P4:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      programSelected = String("   Program 4   ");
-      lcdStartingStopping = LCD_SS_SelectedIdle;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Start   ");
-      lcd.write(2);
-      lcd.setCursor(0, 1);
-      lcd.print(programSelected);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P5:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      programSelected = String("   Program 5   ");
-      lcdStartingStopping = LCD_SS_SelectedIdle;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Start   ");
-      lcd.write(2);
-      lcd.setCursor(0, 1);
-      lcd.print(programSelected);
-      break;
-    }
-    }
-    btnLeftState = btnCenterState = btnRightState = LOW;
-  }
 }
-
-void lcdUpdate()
-{
-  if (millis() - previousLcdMillis >= LCDUPDATEFREQ)
-  {
-    switch (lcdMenuState)
-    {
-    case LCD_Selected_Info:
-    {
-      String printString;
-      if (lcdDisplayFlip == HIGH)
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        printString = String(" Current RPM:   ");
-        lcd.print(printString);
-        lcd.setCursor(0, 1);
-        if (timeElapsed == -1)
-        {
-          printString = String("       --       ");
-        }
-        else
-        {
-          printString = String("      ") + String(testRPM) + String("       ");
-        }
-        lcd.print(printString);
-        lcdDisplayFlip = LOW;
-      }
-      else
-      {
-        if (timeElapsed == -1)
-        {
-          printString = String("       --       ");
-        }
-        else
-        {
-          printString = String("     ") + String((millis() - timeElapsed) / 1000) + String("s/") + String(testTime) + String("s ");
-        }
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.print(" Time elapsed:  ");
-        lcd.setCursor(0, 1);
-        lcd.print(printString);
-        lcdDisplayFlip = HIGH;
-      }
-      break;
-    }
-    case LCD_Starting:
-    {
-      String printString;
-      lcdMenuState = LCD_Selected_Info;
-      printString = String("     ") + String((millis() - timeElapsed) / 1000) + String("s/") + String(testTime) + String("s ");
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.print(" Time elapsed:  ");
-      lcd.setCursor(0, 1);
-      lcd.print(printString);
-      lcdDisplayFlip = HIGH;
-      break;
-    }
-    case LCD_Stopping:
-    {
-      lcdMenuState = LCD_Menu_StartStop;
-      lcd.clear();
-      lcd.setCursor(1, 0);
-      lcd.write(1);
-      lcd.print("    Start   ");
-      lcd.write(2);
-      lcd.setCursor(0, 1);
-      lcd.print(programSelected);
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P1:
-    {
-      if (lcdDisplayFlip == HIGH)
-      {
+void draw_menu_select_custom() {
+    if (lcdDisplayFlip == true) {
         String printString;
         lcd.clear();
-        lcd.setCursor(1, 0);
+        lcd.setCursor(0, 0);
         lcd.write(1);
         printString = String(" RPM:   ") + String(testRPM) + String("  ");
         lcd.print(printString);
         lcd.write(2);
-        lcd.setCursor(1, 1);
+        lcd.setCursor(0, 1);
         printString = String("  Time:  ") + String(testTime) + String("  ");
         lcd.print(printString);
-        lcdDisplayFlip = LOW;
-      }
-      else
-      {
+        lcdDisplayFlip = false;
+    } else {
         lcd.clear();
-        lcd.setCursor(1, 0);
+        lcd.setCursor(0, 0);
         lcd.write(1);
-        lcd.print(" Selecting: ");
+        lcd.print("    Select    ");
         lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print("  Program 1   ");
-        lcdDisplayFlip = HIGH;
-      }
-      break;
+        lcd.setCursor(0, 1);
+        lcd.print("     Custom     ");
+        lcdDisplayFlip = true;
     }
-    case LCD_Selected_ProgramSelect_P2:
-    {
-      if (lcdDisplayFlip == HIGH)
-      {
-        String printString;
+}
+void draw_menu_select_file() {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.write(1);
+    lcd.print("    Select    ");
+    lcd.write(2);
+    lcd.setCursor(0, 1);
+    lcd.print("      File      ");
+}
+
+void draw_info_screen(){
+    String printString;
+    if (lcdDisplayFlip == true) {
         lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        printString = String(" RPM:   ") + String(testRPM * 2) + String("  ");
+        lcd.setCursor(0, 0);
+        printString = String(" Current RPM:   ");
         lcd.print(printString);
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        printString = String("  Time:  ") + String(testTime + 10) + String("  ");
+        lcd.setCursor(0, 1);
+        if (timeElapsed == -1) {
+            printString = String("       --       ");
+        } else {
+            printString = String("      ") + String(testRPM) + String("       ");
+        }
         lcd.print(printString);
-        lcdDisplayFlip = LOW;
-      }
-      else
-      {
+        lcdDisplayFlip = false;
+    } else {
+        if (timeElapsed == -1) {
+            printString = String("       --       ");
+        } else {
+            printString = String("     ") + String((millis() - timeElapsed) / 1000) + String("s/") + String(testTime) + String("s ");
+        }
         lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print(" Selecting: ");
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print("  Program 2   ");
-        lcdDisplayFlip = HIGH;
-      }
-      break;
+        lcd.setCursor(0, 0);
+        lcd.print(" Time elapsed:  ");
+        lcd.setCursor(0, 1);
+        lcd.print(printString);
+        lcdDisplayFlip = true;
     }
-    case LCD_Selected_ProgramSelect_P3:
-    {
-      if (lcdDisplayFlip == HIGH)
-      {
-        String printString;
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        printString = String(" RPM:   ") + String(testRPM * 2) + String("  ");
-        lcd.print(printString);
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        printString = String("  Time:  ") + String(testTime + 10) + String("  ");
-        lcd.print(printString);
-        lcdDisplayFlip = LOW;
-      }
-      else
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print(" Selecting: ");
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print("  Program 3   ");
-        lcdDisplayFlip = HIGH;
-      }
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P4:
-    {
-      if (lcdDisplayFlip == HIGH)
-      {
-        String printString;
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        printString = String(" RPM:   ") + String(testRPM * 2) + String("  ");
-        lcd.print(printString);
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        printString = String("  Time:  ") + String(testTime + 10) + String("  ");
-        lcd.print(printString);
-        lcdDisplayFlip = LOW;
-      }
-      else
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print(" Selecting: ");
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print("  Program 4   ");
-        lcdDisplayFlip = HIGH;
-      }
-      break;
-    }
-    case LCD_Selected_ProgramSelect_P5:
-    {
-      if (lcdDisplayFlip == HIGH)
-      {
-        String printString;
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        printString = String(" RPM:   ") + String(testRPM * 2) + String("  ");
-        lcd.print(printString);
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        printString = String("  Time:  ") + String(testTime + 10) + String("  ");
-        lcd.print(printString);
-        lcdDisplayFlip = LOW;
-      }
-      else
-      {
-        lcd.clear();
-        lcd.setCursor(1, 0);
-        lcd.write(1);
-        lcd.print(" Selecting: ");
-        lcd.write(2);
-        lcd.setCursor(1, 1);
-        lcd.print("  Program 5   ");
-        lcdDisplayFlip = HIGH;
-      }
-      break;
-    }
-    }
+}
+void draw_file_navigator() {
+    //programSelected = String(get_prev_file_name());
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.write(1);
+    lcd.print("  Selecting:  ");
+    lcd.write(2);
+    lcd.setCursor(0, 1);
+    lcd.print(programSelected);
+    lcdDisplayFlip = true;
     previousLcdMillis = millis();
-  }
+}
+void draw_starting_screen() {
+    timeElapsed = millis();
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("    Starting    ");
+    lcd.setCursor(0, 1);
+    lcd.print("   Program...   ");
+    previousLcdMillis = millis();
+}
+void draw_stopping_screen() {
+    timeElapsed = -1;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("    Stopping    ");
+    lcd.setCursor(0, 1);
+    lcd.print("   Program...   ");
+    previousLcdMillis = millis();
+}
+
+bool btnLeftUpdate() {
+    if (!was_left_pressed) {
+        return false; 
+    }
+    was_left_pressed = was_center_pressed = was_right_pressed = false;
+
+    switch (lcdMenuState) {
+        case LCD_Menu_Info: {
+            // should not roll over
+        }
+        case LCD_Menu_StartStop: {
+            lcdMenuState = LCD_Menu_Info;
+            break;
+        }
+        case LCD_Menu_ProgramSelect: {
+            lcdMenuState = LCD_Menu_StartStop;
+            break;
+        }
+        case LCD_ProgramSelect_P0: {
+            // nothing - don't roll over.
+            break;
+        }
+        case LCD_ProgramSelect_Pf: {
+            lcdMenuState = LCD_ProgramSelect_P0;
+            break;
+        }
+        case LCD_FILENAVIGATOR:{
+            programSelected = get_prev_file_name();
+            break;
+        }
+    }
+    return true;
+}
+bool btnRightUpdate() {
+    if (!was_right_pressed) {
+        return false;
+    }
+    was_left_pressed = was_center_pressed = was_right_pressed = false;
+
+    switch (lcdMenuState) {
+        case LCD_Menu_Info: {
+            lcdMenuState = LCD_Menu_StartStop;
+            break;
+        }
+        case LCD_Menu_StartStop: {
+            if (lcdStartingStopping != LCD_SS_SelectedActive) {
+                lcdMenuState = LCD_Menu_ProgramSelect;
+            }
+            break;
+        }
+        case LCD_Menu_ProgramSelect: {
+            // nothing - don't roll over
+            break;
+        }
+        case LCD_ProgramSelect_P0: {
+            lcdMenuState = LCD_ProgramSelect_Pf;
+            lcdDisplayFlip = false;
+            break;
+        }
+        case LCD_ProgramSelect_Pf: {
+            lcdDisplayFlip = false;
+            // nothing - don't roll over
+            break;
+        }
+        case LCD_FILENAVIGATOR:{
+            programSelected = get_next_file_name();
+            break;
+        }
+    }
+    return true;
+}
+
+bool btnCenterUpdate() {
+    if (!was_center_pressed) {
+        return false;
+    }
+    was_left_pressed = was_center_pressed = was_right_pressed = false;
+
+    switch (lcdMenuState) {
+        case LCD_Menu_Info: {
+            lcdMenuState = LCD_Selected_Info;
+            break;
+        }
+        case LCD_Menu_StartStop: {
+            if (lcdStartingStopping == LCD_SS_SelectedIdle) {
+                lcdMenuState = LCD_Starting;
+                lcdStartingStopping = LCD_SS_SelectedActive;
+
+            } else if (lcdStartingStopping == LCD_SS_SelectedActive) {
+                lcdMenuState = LCD_Stopping;
+                lcdStartingStopping = LCD_SS_SelectedIdle;
+            }
+            break;
+        }
+        case LCD_Menu_ProgramSelect: {
+            lcdMenuState = LCD_ProgramSelect_P0;
+            break;
+        }
+        case LCD_Selected_Info: {
+            lcdMenuState = LCD_Menu_Info;
+            break;
+        }
+        case LCD_ProgramSelect_P0: {
+            lcdMenuState = LCD_Menu_StartStop; // todo insert state for customizing the params befare going to start stop screen. 
+            lcdStartingStopping = LCD_SS_SelectedIdle;
+            break;
+        }
+        case LCD_ProgramSelect_Pf: {
+            lcdMenuState = LCD_FILENAVIGATOR;
+            lcdStartingStopping = LCD_SS_SelectedIdle;
+            break;
+        }
+        case LCD_FILENAVIGATOR:{
+            char buff[64];
+            programSelected.toCharArray(buff, 64);
+
+            if (open_if_folder(buff)) {
+                programSelected = get_next_file_name();
+                break;
+            }
+            else{
+                lcdMenuState=LCD_Menu_StartStop;
+            }
+        }
+    }
+    return true;
+}
+
+void navigator_update() {
+    bool update = false;
+    update += btnLeftUpdate();
+	update += btnRightUpdate();
+	update += btnCenterUpdate();
+	
+    if (!update && millis() - previousLcdMillis < LCDUPDATEFREQ) {
+		return;
+	}
+
+	switch (lcdMenuState) {
+        case LCD_Menu_Info           :{draw_menu_info();break;}
+        case LCD_Menu_StartStop      :{draw_menu_start_stop();break;}
+        case LCD_Menu_ProgramSelect  :{draw_menu_program_select();break;}
+        case LCD_Selected_Info       :{draw_info_screen();break;}
+        case LCD_Starting            :{draw_starting_screen();lcdMenuState = LCD_Selected_Info;break;}
+        case LCD_Stopping            :{draw_stopping_screen();lcdMenuState = LCD_Menu_StartStop;break;}
+        case LCD_ProgramSelect_P0    :{draw_menu_select_custom();break;} // todo create menu where you can select rpm and time
+        case LCD_ProgramSelect_Pf    :{draw_menu_select_file();break;} 
+        case LCD_FILENAVIGATOR       :{draw_file_navigator();break;}
+        default:{
+            lcdMenuState=LCD_Menu_Info;
+        }
+	}
+	previousLcdMillis = millis();
+}
+
+
+const char loaded_program[64];
+unsigned int file_index = 0;
+unsigned int n_files = 0;
+File root;
+File entry;
+
+void SD_init(int cs) {
+    if (!SD.begin(cs)) {
+        lcd.clear();
+        lcd.print("Micro-SD failed");
+        delay(2000);
+    }
+    root = SD.open("/", FILE_READ);
+    count_files();
+}
+
+void count_files() {
+    root.rewindDirectory();
+    n_files = -1;  // start at -1 to avoid off by one err.
+    do {
+        entry = root.openNextFile();
+        n_files++;
+    } while (entry);
+    root.rewindDirectory();
+    file_index=0;
+}
+
+bool open_if_folder(char* p) {
+    if (!SD.exists(p)) {return false;}
+    File tmp = SD.open(p);
+    if (!tmp.isDirectory()) {return false;}
+    tmp.close();
+    root = SD.open(p);
+    count_files();
+    return true;
+}
+
+char* get_next_line() {
+    return ("g1x1f25\n");
+}
+
+char* get_next_file_name() {
+    if(file_index < n_files){
+        entry = root.openNextFile();
+        file_index++;
+    }   
+    return entry.name();
+}
+
+char* get_prev_file_name() {
+    if (file_index > 0) {
+        file_index--;
+    }
+    root.rewindDirectory();
+    for (int i = 0; i < file_index; i++) {
+        entry = root.openNextFile();
+    }
+    return entry.name();
+}
+
+void set_program(char* p) {
+    if (SD.exists(p)) {
+        strcpy(p, loaded_program);
+    } else {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.println("File read error ");
+    }
 }
