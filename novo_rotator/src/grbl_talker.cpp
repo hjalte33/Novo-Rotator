@@ -1,7 +1,7 @@
 
 #include "HardwareSerial.h"
-#include "arduino.h"
-#include "grbl_talker.h"
+#include <Arduino.h>
+#include "../include/grbl_talker.h"
 
 uint8_t grbl_state = 255;
 float grbl_rotations;
