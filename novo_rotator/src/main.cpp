@@ -1,26 +1,19 @@
-#include <Arduino.h>
 #include <Ethernet.h>
 #include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <helpers.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "grbl_talker.h"
+#include "../include/grbl_talker.h"
+#include "../include/helpers.h"
+#include "../include/navigator.h"
 
-#include "DFRobot_LCD.h"
-
-#define BUF_LEN 128
-#define LCDUPDATEFREQUENCY 1000
-#define TCPUPDATEFREQUENCY 100
-#define BTN_L 5
-#define BTN_C 6
-#define BTN_R A2
 #define ETH_CS 10
 #define SD_CS 4
+#define BUF_LEN 128
 
-DFRobot_LCD lcd(16, 2);  // 16 characters and 2 lines of show
+unsigned long destinationTimeS;
 
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
@@ -41,118 +34,13 @@ unsigned long lastTick = 0;
 int tickCounter = 0;
 bool grblOkAwait = true;
 
-
 // settings
 byte rpm = 0;
 unsigned long destinationTime = 0;
 unsigned long consumedTime = 0;
 
 
-unsigned long lastLCDUpdate = 0;
-void updateLCD() {
-    if (millis() < lastLCDUpdate + LCDUPDATEFREQUENCY)
-        return;
-    lastLCDUpdate = millis();
 
-    switch (grbl_state) {
-        case STATE_ALARM:
-            lcd.setCursor(0, 0);
-            lcd.println("Err             ");
-            lcd.setCursor(0, 1);
-            lcd.println("                ");
-            lcd.setRGB(255, 10, 10);
-            break;
-        case STATE_IDLE:
-            lcd.setCursor(0, 0);
-            lcd.println("Idle            ");
-            lcd.setCursor(0, 1);
-            lcd.println("                ");
-            lcd.setRGB(50, 50, 255);
-            break;
-        case STATE_CYCLE:
-            lcd.setCursor(0, 0);
-            lcd.print("Run  t=");
-            lcd.print(consumedTime);
-            lcd.setCursor(0, 1);
-            lcd.println("                ");
-            lcd.setRGB(50, 255, 50);
-            break;
-        default:
-            break;
-    }
-}
-
-void breath(unsigned char color) {
-    for (int i = 0; i < 255; i++) {
-        lcd.setPWM(color, i);
-        delay(5);
-    }
-
-    delay(500);
-    for (int i = 254; i >= 0; i--) {
-        lcd.setPWM(color, i);
-        delay(5);
-    }
-
-    delay(500);
-}
-
-
-
-void setup() {
-    // Setp pins
-
-    Wire.begin();
-    // initialize LCD
-    lcd.init();
-    // Print a message to the LCD.
-    lcd.setCursor(1, 0);
-    lcd.print("Novo Rotator");
-    lcd.setCursor(3, 1);
-    lcd.print("FW: 0.0.1");
-    delay(2500);
-    lcd.clear();
-    lcd.print("Starting...");
-    lcd.setCursor(0, 1);
-    lcd.print("Serial          ");
-    Serial.begin(115200);
-    // Open serial communications with grbl and wait for port to open:
-    grbl_init();
-
-    lcd.setCursor(0, 1);
-    lcd.print("Ethernet        ");
-    // start the Ethernet connection and the server:
-    Ethernet.begin(mac, ip, gateway, gateway, subnet);
-    Ethernet.init(ETH_CS);  // ethernet shield activation pin.
-
-    
-    if (Ethernet.linkStatus() == LinkOFF) {
-        lcd.println("No eth cable    ");
-        delay(3000);
-    }
-    // start the server
-    ethServer.begin();
-
-    lcd.clear();
-    lcd.setCursor(0, 1);
-    lcd.print("SD card reader  ");
-
-    if (!SD.begin(SD_CS)) {
-        lcd.clear();
-        lcd.print("initialization failed");
-        // lcd.print("1. is a card inserted?");
-        // lcd.print("2. is your wiring correct?");
-        // lcd.print("3. did you change the chipSelect pin to match your shield or module?");
-        // lcd.print("Note: press reset or reopen this Serial Monitor after fixing your issue!");
-        lcd.autoscroll();
-        delay(30000);
-    }
-    delay(2000);
-
-    lcd.setRGB(100, 100, 254);
-    lcd.clear();
-    lcd.write("Ready");
-}
 
 void updateLED(int input) {
     if (input) {
@@ -225,11 +113,13 @@ bool commandParser(EthernetClient *client) {
                     if(inData[2] == '~') {messageDismissed = true;}
                     else if(inData[2] != '=') {return false;}
                     else {strcpy(&inData[3],message); messageDismissed=false;}
+                    client->println("ok");
                     break;
                 case 'R':
                    grbl_reset(); // ctrl+c means reset grbl.
                    break;
                 default:
+                    client->println("error");
                     return false;
                     break;
             }
@@ -270,7 +160,7 @@ bool commandParser(EthernetClient *client) {
             }
         }
     }// end while
-    client->println("got it");
+    client->println("ok");
     return true;
 
 }  // end commandParser
@@ -294,10 +184,43 @@ void ticker() {
     }
 }
 
+
+void setup() {
+    Wire.begin();
+    Serial.begin(115200);
+    // Initialize LCD screen
+    lcdInit();
+
+    // Open serial communications with grbl and wait for port to open:
+    grbl_init();
+
+    lcd.setCursor(0, 1);
+    lcd.print("Ethernet        ");
+    // start the Ethernet connection and the server:
+    Ethernet.begin(mac, ip, gateway, gateway, subnet);
+    Ethernet.init(ETH_CS);  // ethernet shield activation pin.
+
+    
+    if (Ethernet.linkStatus() == LinkOFF) {
+        lcd.println("No eth cable    ");
+        delay(2000);
+    }
+    // start the server
+    ethServer.begin();
+
+    lcd.clear();
+    lcd.setCursor(0, 1);
+    lcd.print("SD card reader  ");
+    SD_init(SD_CS);
+    draw_menu_info();
+    btnsInit();
+}
+
 void loop() {
     ticker();
     grbl_sync();
-    //updateLCD();
+
+    navigator_update();
 
     // read tcp communication.
     // Wait for an incomming connection
@@ -309,12 +232,11 @@ void loop() {
     // Only here if anything to read from eth port
     // Is there anything to read?
     if (client.available()) {
-        int bytesReceived = client.readBytesUntil('\n', inData, BUFFER_LENGTH);
+        int bytesReceived = client.readBytesUntil('\n', inData, BUF_LEN);
         inData[bytesReceived] = '\0';  // Null terminate the string.
     } else
         return;
 
     commandParser(&client);
-
 
 }
