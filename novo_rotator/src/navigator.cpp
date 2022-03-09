@@ -17,7 +17,7 @@ bool was_right_pressed = false;   // Button flag
 
 
 // Menu state
-byte lcdMenuState, lcdDisplayFlip, lcdStartingStopping;
+byte lcdMenuState, lcdDisplayFlip, lcdStartingStopping, lcdContinuousUpdate;
 String programSelected;
 
 // LCD variables
@@ -55,7 +55,8 @@ void lcdInit() {
     lcd.customSymbol(1, symbolArrowLeft);
     lcdMenuState = LCD_Menu_Info;
     lcdStartingStopping = LCD_SS_Unselected;
-    byte lcdDisplayFlip = true;
+    lcdDisplayFlip = true;
+    lcdContinuousUpdate = false;
     programSelected = String("       --       ");
     // Print a message to the LCD.
     /*
@@ -70,7 +71,6 @@ void lcdInit() {
       lcd.print("Serial          ");
       */
 }
-
 void btnsInit() {
     pinMode(btnLeftPin, INPUT_PULLUP);
     pinMode(btnCenterPin, INPUT_PULLUP);
@@ -99,24 +99,24 @@ void ISR_btnRightPress() {
 }
 
 void draw_menu_info() {
-    lcd.clear();
+    //lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.write(1);
-    lcd.print("     Info     ");
+    lcd.print("      Info     ");
     lcd.write(2);
+    lcd.setCursor(0, 1);
+    lcd.print("               ");
 }
 void draw_menu_program_select() {
-    lcd.clear();
+    //lcd.clear();
     lcd.setCursor(0, 0);
     lcd.write(1);
     lcd.print("    Program   ");
-    lcd.write(2);
     lcd.setCursor(0, 1);
     lcd.print("     Select     ");
 }
 void draw_menu_start_stop() {
     if (lcdStartingStopping == LCD_SS_Unselected) {
-        lcd.clear();
+        //lcd.clear();
         lcd.setCursor(0, 0);
         lcd.write(1);
         lcd.print("  Start/Stop  ");
@@ -136,7 +136,6 @@ void draw_menu_start_stop() {
         lcd.setCursor(0, 0);
         lcd.write(1);
         lcd.print("     Stop     ");
-        lcd.write(2);
         lcd.setCursor(0, 1);
         lcd.print(programSelected);
     }
@@ -157,8 +156,7 @@ void draw_menu_select_custom() {
     } else {
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.write(1);
-        lcd.print("    Select    ");
+        lcd.print("     Select    ");
         lcd.write(2);
         lcd.setCursor(0, 1);
         lcd.print("     Custom     ");
@@ -170,11 +168,9 @@ void draw_menu_select_file() {
     lcd.setCursor(0, 0);
     lcd.write(1);
     lcd.print("    Select    ");
-    lcd.write(2);
     lcd.setCursor(0, 1);
     lcd.print("      File      ");
 }
-
 void draw_info_screen(){
     String printString;
     if (lcdDisplayFlip == true) {
@@ -223,7 +219,7 @@ void draw_starting_screen() {
     lcd.print("    Starting    ");
     lcd.setCursor(0, 1);
     lcd.print("   Program...   ");
-    previousLcdMillis = millis();
+    lcdDisplayFlip = true;
 }
 void draw_stopping_screen() {
     timeElapsed = -1;
@@ -232,7 +228,7 @@ void draw_stopping_screen() {
     lcd.print("    Stopping    ");
     lcd.setCursor(0, 1);
     lcd.print("   Program...   ");
-    previousLcdMillis = millis();
+    lcdDisplayFlip = true;
 }
 
 bool btnLeftUpdate() {
@@ -244,6 +240,7 @@ bool btnLeftUpdate() {
     switch (lcdMenuState) {
         case LCD_Menu_Info: {
             // should not roll over
+            return false;
         }
         case LCD_Menu_StartStop: {
             lcdMenuState = LCD_Menu_Info;
@@ -255,15 +252,25 @@ bool btnLeftUpdate() {
         }
         case LCD_ProgramSelect_P0: {
             // nothing - don't roll over.
-            break;
+            return false;
         }
         case LCD_ProgramSelect_Pf: {
             lcdMenuState = LCD_ProgramSelect_P0;
+            lcdDisplayFlip = false;
             break;
         }
         case LCD_FILENAVIGATOR:{
             programSelected = get_prev_file_name();
             break;
+        }
+        case LCD_Starting: {
+            return false;
+        }
+        case LCD_Stopping: {
+            return false;
+        }
+        case LCD_Selected_Info: {
+            return false;
         }
     }
     return true;
@@ -283,30 +290,40 @@ bool btnRightUpdate() {
             if (lcdStartingStopping != LCD_SS_SelectedActive) {
                 lcdMenuState = LCD_Menu_ProgramSelect;
             }
+            else {return false;}
             break;
         }
         case LCD_Menu_ProgramSelect: {
             // nothing - don't roll over
-            break;
+            return false;
         }
         case LCD_ProgramSelect_P0: {
             lcdMenuState = LCD_ProgramSelect_Pf;
-            lcdDisplayFlip = false;
             break;
         }
         case LCD_ProgramSelect_Pf: {
-            lcdDisplayFlip = false;
             // nothing - don't roll over
-            break;
+            return false;
         }
         case LCD_FILENAVIGATOR:{
             programSelected = get_next_file_name();
             break;
         }
+        case LCD_Starting:
+        {
+            return false;
+        }
+        case LCD_Stopping:
+        {
+            return false;
+        }
+        case LCD_Selected_Info:
+        {
+            return false;
+        }
     }
     return true;
 }
-
 bool btnCenterUpdate() {
     if (!was_center_pressed) {
         return false;
@@ -316,25 +333,33 @@ bool btnCenterUpdate() {
     switch (lcdMenuState) {
         case LCD_Menu_Info: {
             lcdMenuState = LCD_Selected_Info;
+            lcdDisplayFlip = false;
+            lcdContinuousUpdate = true;
             break;
         }
         case LCD_Menu_StartStop: {
             if (lcdStartingStopping == LCD_SS_SelectedIdle) {
                 lcdMenuState = LCD_Starting;
                 lcdStartingStopping = LCD_SS_SelectedActive;
-
+                lcdDisplayFlip = false;
+                lcdContinuousUpdate = true;
             } else if (lcdStartingStopping == LCD_SS_SelectedActive) {
                 lcdMenuState = LCD_Stopping;
                 lcdStartingStopping = LCD_SS_SelectedIdle;
-            }
+                lcdDisplayFlip = false;
+                lcdContinuousUpdate = true;
+            } else return false;
             break;
         }
         case LCD_Menu_ProgramSelect: {
             lcdMenuState = LCD_ProgramSelect_P0;
+            lcdDisplayFlip = false;
             break;
         }
         case LCD_Selected_Info: {
             lcdMenuState = LCD_Menu_Info;
+            lcdDisplayFlip = false;
+            lcdContinuousUpdate = false;
             break;
         }
         case LCD_ProgramSelect_P0: {
@@ -359,6 +384,8 @@ bool btnCenterUpdate() {
                 lcdMenuState=LCD_Menu_StartStop;
             }
         }
+        case LCD_Starting:{return false;}
+        case LCD_Stopping:{return false;}
     }
     return true;
 }
@@ -369,7 +396,7 @@ void navigator_update() {
 	update += btnRightUpdate();
 	update += btnCenterUpdate();
 	
-    if (!update && millis() - previousLcdMillis < LCDUPDATEFREQ) {
+    if (!update && !(lcdContinuousUpdate && (millis() - previousLcdMillis > LCDUPDATEFREQ))) {
 		return;
 	}
 
@@ -378,8 +405,34 @@ void navigator_update() {
         case LCD_Menu_StartStop      :{draw_menu_start_stop();break;}
         case LCD_Menu_ProgramSelect  :{draw_menu_program_select();break;}
         case LCD_Selected_Info       :{draw_info_screen();break;}
-        case LCD_Starting            :{draw_starting_screen();lcdMenuState = LCD_Selected_Info;break;}
-        case LCD_Stopping            :{draw_stopping_screen();lcdMenuState = LCD_Menu_StartStop;break;}
+        case LCD_Starting:
+        {
+            if (!lcdDisplayFlip)
+            {
+                draw_starting_screen();
+            }
+            else
+            {
+                lcdMenuState = LCD_Selected_Info;
+                lcdDisplayFlip = false;
+                draw_info_screen();
+            }
+            break;
+        }
+        case LCD_Stopping:
+        {
+            if (!lcdDisplayFlip)
+            {
+                draw_stopping_screen();
+            }
+            else
+            {
+                lcdMenuState = LCD_Menu_StartStop;
+                lcdContinuousUpdate = false;
+                draw_menu_start_stop();
+            }
+            break;
+        }
         case LCD_ProgramSelect_P0    :{draw_menu_select_custom();break;} // todo create menu where you can select rpm and time
         case LCD_ProgramSelect_Pf    :{draw_menu_select_file();break;} 
         case LCD_FILENAVIGATOR       :{draw_file_navigator();break;}

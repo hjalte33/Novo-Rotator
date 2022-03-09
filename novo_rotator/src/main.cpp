@@ -190,7 +190,6 @@ void setup() {
     Serial.begin(115200);
     // Initialize LCD screen
     lcdInit();
-    btnsInit();
 
     // Open serial communications with grbl and wait for port to open:
     grbl_init();
@@ -213,7 +212,8 @@ void setup() {
     lcd.setCursor(0, 1);
     lcd.print("SD card reader  ");
     SD_init(SD_CS);
-
+    draw_menu_info();
+    btnsInit();
 }
 
 void loop() {
