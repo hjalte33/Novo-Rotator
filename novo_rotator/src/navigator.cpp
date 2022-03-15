@@ -18,7 +18,7 @@ bool was_right_pressed = false;   // Button flag
 
 // Menu state
 byte lcdMenuState, lcdDisplayFlip, lcdStartingStopping, lcdContinuousUpdate;
-String programSelected;
+String programSelected, programSelected_navigator, first_file;
 
 // LCD variables
 DFRobot_LCD lcd(16, 2);
@@ -43,20 +43,42 @@ byte symbolArrowLeft[8] = {
     B00100,
     B00000,
     B00000};
-
+byte symbolArrowReturn[8] = {
+    B11111,
+    B00001,
+    B00001,
+    B00101,
+    B01001,
+    B11111,
+    B01000,
+    B00100};
 // SD card program description variables
-unsigned int testRPM = 30, testTime = 150;
+unsigned int selected_rpm = 30, selected_time = 150, custom_rpm = 0, custom_time = 0;
 long timeElapsed = -1, timeInitiated = -1;
+
+// SD card variables
+const char loaded_program[64];
+unsigned int file_index = 0;
+unsigned int n_files = 0;
+File root;
+File entry;
+char current_path[10][100], global_buff[256];
+unsigned int current_path_count = 0;
+
+// Freq
+unsigned int lcd_curr_update_freq;
 
 void lcdInit() {
     // Initialize LCD
     lcd.init();
+    lcd.customSymbol(3, symbolArrowReturn);
     lcd.customSymbol(2, symbolArrowRight);
     lcd.customSymbol(1, symbolArrowLeft);
     lcdMenuState = LCD_Menu_Info;
     lcdStartingStopping = LCD_SS_Unselected;
     lcdDisplayFlip = true;
     lcdContinuousUpdate = false;
+    lcd_curr_update_freq = 999999;
     programSelected = String("       --       ");
     // Print a message to the LCD.
     /*
@@ -99,15 +121,13 @@ void ISR_btnRightPress() {
 }
 
 void draw_menu_info() {
-    //lcd.clear();
+    lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("      Info     ");
     lcd.write(2);
-    lcd.setCursor(0, 1);
-    lcd.print("               ");
 }
 void draw_menu_program_select() {
-    //lcd.clear();
+    lcd.clear();
     lcd.setCursor(0, 0);
     lcd.write(1);
     lcd.print("    Program   ");
@@ -116,7 +136,7 @@ void draw_menu_program_select() {
 }
 void draw_menu_start_stop() {
     if (lcdStartingStopping == LCD_SS_Unselected) {
-        //lcd.clear();
+        lcd.clear();
         lcd.setCursor(0, 0);
         lcd.write(1);
         lcd.print("  Start/Stop  ");
@@ -141,27 +161,13 @@ void draw_menu_start_stop() {
     }
 }
 void draw_menu_select_custom() {
-    if (lcdDisplayFlip == true) {
-        String printString;
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.write(1);
-        printString = String(" RPM:   ") + String(testRPM) + String("  ");
-        lcd.print(printString);
-        lcd.write(2);
-        lcd.setCursor(0, 1);
-        printString = String("  Time:  ") + String(testTime) + String("  ");
-        lcd.print(printString);
-        lcdDisplayFlip = false;
-    } else {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("     Select    ");
+        lcd.print("    Select    ");
         lcd.write(2);
         lcd.setCursor(0, 1);
         lcd.print("     Custom     ");
-        lcdDisplayFlip = true;
-    }
 }
 void draw_menu_select_file() {
     lcd.clear();
@@ -182,7 +188,7 @@ void draw_info_screen(){
         if (timeElapsed == -1) {
             printString = String("       --       ");
         } else {
-            printString = String("      ") + String(testRPM) + String("       ");
+            printString = String("      ") + String(selected_rpm) + String("       ");
         }
         lcd.print(printString);
         lcdDisplayFlip = false;
@@ -190,7 +196,7 @@ void draw_info_screen(){
         if (timeElapsed == -1) {
             printString = String("       --       ");
         } else {
-            printString = String("     ") + String((millis() - timeElapsed) / 1000) + String("s/") + String(testTime) + String("s ");
+            printString = String("     ") + String((millis() - timeElapsed) / 1000) + String("s/") + String(selected_time) + String("s ");
         }
         lcd.clear();
         lcd.setCursor(0, 0);
@@ -206,11 +212,10 @@ void draw_file_navigator() {
     lcd.setCursor(0, 0);
     lcd.write(1);
     lcd.print("  Selecting:  ");
-    lcd.write(2);
+    if(file_index < n_files)
+        lcd.write(2);
     lcd.setCursor(0, 1);
-    lcd.print(programSelected);
-    lcdDisplayFlip = true;
-    previousLcdMillis = millis();
+    lcd.print(programSelected_navigator);
 }
 void draw_starting_screen() {
     timeElapsed = millis();
@@ -219,7 +224,6 @@ void draw_starting_screen() {
     lcd.print("    Starting    ");
     lcd.setCursor(0, 1);
     lcd.print("   Program...   ");
-    lcdDisplayFlip = true;
 }
 void draw_stopping_screen() {
     timeElapsed = -1;
@@ -228,7 +232,49 @@ void draw_stopping_screen() {
     lcd.print("    Stopping    ");
     lcd.setCursor(0, 1);
     lcd.print("   Program...   ");
-    lcdDisplayFlip = true;
+}
+void draw_navigator_return(){
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("     Return    ");
+    lcd.write(2);
+    lcd.setCursor(7, 1);
+    lcd.write(3);
+}
+void draw_selected_custom_rpm(){
+    String printString = String("      ") + String(custom_rpm) + String("       ");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("      RPM:      ");
+    if(custom_rpm == 0){
+        lcd.setCursor(1, 1);
+    }
+    else
+    {
+        lcd.setCursor(0, 1);
+        lcd.write(1);
+    }
+    lcd.print(printString);
+    lcd.setCursor(15, 1);
+    lcd.write(2);
+}
+void draw_selected_custom_time(){
+    String printString = String("      ") + String(custom_time) + String("       ");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("    Time(s):    ");
+    if (custom_time == 0)
+    {
+        lcd.setCursor(1, 1);
+    }
+    else
+    {
+        lcd.setCursor(0, 1);
+        lcd.write(1);
+    }
+    lcd.print(printString);
+    lcd.setCursor(15, 1);
+    lcd.write(2);
 }
 
 bool btnLeftUpdate() {
@@ -238,10 +284,6 @@ bool btnLeftUpdate() {
     was_left_pressed = was_center_pressed = was_right_pressed = false;
 
     switch (lcdMenuState) {
-        case LCD_Menu_Info: {
-            // should not roll over
-            return false;
-        }
         case LCD_Menu_StartStop: {
             lcdMenuState = LCD_Menu_Info;
             break;
@@ -250,26 +292,38 @@ bool btnLeftUpdate() {
             lcdMenuState = LCD_Menu_StartStop;
             break;
         }
-        case LCD_ProgramSelect_P0: {
-            // nothing - don't roll over.
-            return false;
-        }
         case LCD_ProgramSelect_Pf: {
             lcdMenuState = LCD_ProgramSelect_P0;
             lcdDisplayFlip = false;
             break;
         }
-        case LCD_FILENAVIGATOR:{
-            programSelected = get_prev_file_name();
+        case LCD_FILENAVIGATOR: {
+            //If the current file we are on is the first file, I want to go to the return screen
+            if(file_index == 0)
+                lcdMenuState = LCD_FILENAVIGATOR_Return;
+            //Else go to the previous file in the same directory
+            else 
+                programSelected_navigator = get_prev_file_name();
             break;
         }
-        case LCD_Starting: {
-            return false;
+        case LCD_ProgramSelect_P0: {
+            lcdMenuState = LCD_ProgramSelect_Return;
+            break;
         }
-        case LCD_Stopping: {
-            return false;
+        case LCD_Selected_P0_RPM:{
+            if(custom_rpm == 0)
+                return false;
+            custom_rpm-=10;
+            break;
         }
-        case LCD_Selected_Info: {
+        case LCD_Selected_P0_Time:
+        {
+            if (custom_time == 0)
+                return false;    
+            custom_time -= 10;
+            break;
+        }
+        default: {
             return false;
         }
     }
@@ -293,32 +347,35 @@ bool btnRightUpdate() {
             else {return false;}
             break;
         }
-        case LCD_Menu_ProgramSelect: {
-            // nothing - don't roll over
-            return false;
+        case LCD_ProgramSelect_Return: {
+            lcdMenuState = LCD_ProgramSelect_P0;
+            break;
         }
         case LCD_ProgramSelect_P0: {
             lcdMenuState = LCD_ProgramSelect_Pf;
             break;
         }
-        case LCD_ProgramSelect_Pf: {
-            // nothing - don't roll over
-            return false;
-        }
-        case LCD_FILENAVIGATOR:{
-            programSelected = get_next_file_name();
+        case LCD_FILENAVIGATOR: {
+            if(file_index >= n_files)
+                return false;
+            programSelected_navigator = get_next_file_name();
             break;
         }
-        case LCD_Starting:
-        {
-            return false;
+        case LCD_FILENAVIGATOR_Return: {
+            lcdMenuState = LCD_FILENAVIGATOR;
+            break;
         }
-        case LCD_Stopping:
+        case LCD_Selected_P0_RPM:
         {
-            return false;
+            custom_rpm += 10;
+            break;
         }
-        case LCD_Selected_Info:
+        case LCD_Selected_P0_Time:
         {
+            custom_time += 10;
+            break;
+        }
+        default: {
             return false;
         }
     }
@@ -335,6 +392,7 @@ bool btnCenterUpdate() {
             lcdMenuState = LCD_Selected_Info;
             lcdDisplayFlip = false;
             lcdContinuousUpdate = true;
+            lcd_curr_update_freq = INFOUPDATEFREQ;
             break;
         }
         case LCD_Menu_StartStop: {
@@ -343,17 +401,22 @@ bool btnCenterUpdate() {
                 lcdStartingStopping = LCD_SS_SelectedActive;
                 lcdDisplayFlip = false;
                 lcdContinuousUpdate = true;
+                lcd_curr_update_freq = SSUPDATEFREQ;
             } else if (lcdStartingStopping == LCD_SS_SelectedActive) {
                 lcdMenuState = LCD_Stopping;
                 lcdStartingStopping = LCD_SS_SelectedIdle;
                 lcdDisplayFlip = false;
                 lcdContinuousUpdate = true;
+                lcd_curr_update_freq = SSUPDATEFREQ;
             } else return false;
             break;
         }
         case LCD_Menu_ProgramSelect: {
             lcdMenuState = LCD_ProgramSelect_P0;
-            lcdDisplayFlip = false;
+            break;
+        }
+        case LCD_ProgramSelect_Return: {
+            lcdMenuState = LCD_Menu_ProgramSelect;
             break;
         }
         case LCD_Selected_Info: {
@@ -363,29 +426,56 @@ bool btnCenterUpdate() {
             break;
         }
         case LCD_ProgramSelect_P0: {
-            lcdMenuState = LCD_Menu_StartStop; // todo insert state for customizing the params befare going to start stop screen. 
+            lcdMenuState = LCD_Selected_P0_RPM;
+            break;
+        }
+        case LCD_Selected_P0_RPM:{
+            selected_rpm = custom_rpm;
+            lcdMenuState = LCD_Selected_P0_Time;
+            break;
+        }
+        case LCD_Selected_P0_Time:{
+            selected_time = custom_time;
+            lcdMenuState = LCD_Menu_StartStop;
             lcdStartingStopping = LCD_SS_SelectedIdle;
+            programSelected = "     Custom     ";
             break;
         }
         case LCD_ProgramSelect_Pf: {
             lcdMenuState = LCD_FILENAVIGATOR;
-            lcdStartingStopping = LCD_SS_SelectedIdle;
+            root = SD.open("/", FILE_READ);
+            count_files();
+            programSelected_navigator = get_next_file_name();
+            current_path_count = 0;
             break;
         }
         case LCD_FILENAVIGATOR:{
-            char buff[64];
-            programSelected.toCharArray(buff, 64);
-
-            if (open_if_folder(buff)) {
-                programSelected = get_next_file_name();
-                break;
+            if (open_if_folder()) {
+                programSelected_navigator = get_next_file_name();
             }
             else{
-                lcdMenuState=LCD_Menu_StartStop;
+                lcdMenuState = LCD_Menu_StartStop;
+                programSelected = programSelected_navigator;
             }
+            break;
         }
-        case LCD_Starting:{return false;}
-        case LCD_Stopping:{return false;}
+        case LCD_FILENAVIGATOR_Return:{
+            if(current_path_count == 0){ //If I'm in the root of the sd card, take me back to the program select screen
+                lcdMenuState = LCD_ProgramSelect_Pf;
+            }
+            else{ //Else take me back to the previous folder
+                lcdMenuState = LCD_FILENAVIGATOR;
+                get_return_path();
+                root = SD.open(global_buff);
+                count_files();
+                programSelected_navigator = get_next_file_name();
+                current_path_count--;
+            }
+            break;
+        }
+        default: {
+            return false;
+        }
     }
     return true;
 }
@@ -396,7 +486,7 @@ void navigator_update() {
 	update += btnRightUpdate();
 	update += btnCenterUpdate();
 	
-    if (!update && !(lcdContinuousUpdate && (millis() - previousLcdMillis > LCDUPDATEFREQ))) {
+    if (!update && !(lcdContinuousUpdate && (millis() - previousLcdMillis > lcd_curr_update_freq))) {
 		return;
 	}
 
@@ -407,7 +497,7 @@ void navigator_update() {
         case LCD_Selected_Info       :{draw_info_screen();break;}
         case LCD_Starting:
         {
-            if (!lcdDisplayFlip)
+            if (update)
             {
                 draw_starting_screen();
             }
@@ -415,13 +505,14 @@ void navigator_update() {
             {
                 lcdMenuState = LCD_Selected_Info;
                 lcdDisplayFlip = false;
+                lcd_curr_update_freq = INFOUPDATEFREQ;
                 draw_info_screen();
             }
             break;
         }
         case LCD_Stopping:
         {
-            if (!lcdDisplayFlip)
+            if (update)
             {
                 draw_stopping_screen();
             }
@@ -433,22 +524,17 @@ void navigator_update() {
             }
             break;
         }
-        case LCD_ProgramSelect_P0    :{draw_menu_select_custom();break;} // todo create menu where you can select rpm and time
-        case LCD_ProgramSelect_Pf    :{draw_menu_select_file();break;} 
-        case LCD_FILENAVIGATOR       :{draw_file_navigator();break;}
-        default:{
-            lcdMenuState=LCD_Menu_Info;
-        }
+        case LCD_ProgramSelect_P0       :{draw_menu_select_custom();break;} 
+        case LCD_ProgramSelect_Pf       :{draw_menu_select_file();break;} 
+        case LCD_ProgramSelect_Return   :{draw_navigator_return();break;}
+        case LCD_FILENAVIGATOR          :{draw_file_navigator();break;}
+        case LCD_FILENAVIGATOR_Return   :{draw_navigator_return();break;}
+        case LCD_Selected_P0_RPM        :{draw_selected_custom_rpm();break;}
+        case LCD_Selected_P0_Time       :{draw_selected_custom_time();break;}
+        default                         :{lcdMenuState=LCD_Menu_Info;}
 	}
 	previousLcdMillis = millis();
 }
-
-
-const char loaded_program[64];
-unsigned int file_index = 0;
-unsigned int n_files = 0;
-File root;
-File entry;
 
 void SD_init(int cs) {
     if (!SD.begin(cs)) {
@@ -468,15 +554,19 @@ void count_files() {
         n_files++;
     } while (entry);
     root.rewindDirectory();
-    file_index=0;
+    file_index=0000000;
 }
 
-bool open_if_folder(char* p) {
-    if (!SD.exists(p)) {return false;}
-    File tmp = SD.open(p);
-    if (!tmp.isDirectory()) {return false;}
-    tmp.close();
-    root = SD.open(p);
+bool open_if_folder() {
+    if(!entry.isDirectory()) {return false;}
+    
+    strcpy(current_path[current_path_count],entry.name());
+    current_path_count++;
+
+    get_forward_path();
+    root = SD.open(global_buff);
+    //root = SD.open(entry.name());
+
     count_files();
     return true;
 }
@@ -494,10 +584,9 @@ char* get_next_file_name() {
 }
 
 char* get_prev_file_name() {
-    if (file_index > 0) {
-        file_index--;
-    }
     root.rewindDirectory();
+    if(file_index > 0)
+        file_index--;
     for (int i = 0; i < file_index; i++) {
         entry = root.openNextFile();
     }
@@ -512,4 +601,31 @@ void set_program(char* p) {
         lcd.setCursor(0, 0);
         lcd.println("File read error ");
     }
+}
+
+void get_return_path() {
+    String return_path;
+    char buff[256];
+    if (current_path_count < 2)
+    {
+        return_path = String('/');
+    }
+    else
+    {
+    for(int i = 0; i < current_path_count - 1; i++)
+        return_path += String('/') + String(current_path[i]);
+    }
+    return_path.toCharArray(buff,256);
+    Serial.println(buff);
+    strcpy(global_buff, buff);
+}
+
+void get_forward_path() {
+    String forward_path;
+    char buff[256];
+    for (int i = 0; i < current_path_count; i++)
+        forward_path += String('/') + String(current_path[i]);
+    forward_path.toCharArray(buff, 256);
+    Serial.println(buff);
+    strcpy(global_buff,buff);
 }
