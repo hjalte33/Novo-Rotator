@@ -66,6 +66,7 @@ void count_files();
 bool open_if_folder();
 
 char* get_next_line();
+void read_file();
 void set_program(char* p);
 char* get_next_file_name();
 char* get_prev_file_name();

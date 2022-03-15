@@ -444,6 +444,8 @@ bool btnCenterUpdate() {
         }
         case LCD_ProgramSelect_Pf: {
             lcdMenuState = LCD_FILENAVIGATOR;
+            root.close();
+            entry.close();
             root = SD.open("/", FILE_READ);
             count_files();
             programSelected_navigator = get_next_file_name();
@@ -459,6 +461,7 @@ bool btnCenterUpdate() {
             else{
                 lcdMenuState = LCD_Menu_StartStop;
                 programSelected = programSelected_navigator;
+                read_file();
             }
             break;
         }
@@ -565,7 +568,9 @@ bool open_if_folder() {
     current_path_count++;
 
     get_forward_path();
-    root = SD.open(global_buff);
+    root.close();
+    entry.close();
+    root = SD.open(global_buff, FILE_READ);
     //root = SD.open(entry.name());
 
     count_files();
@@ -576,8 +581,27 @@ char* get_next_line() {
     return ("g1x1f25\n");
 }
 
+void read_file(){
+    if (entry)
+    {
+        // read from the file until there's nothing else in it:
+        while (entry.available())
+        {
+            Serial.write(entry.read());
+        }
+        // close the file:
+        entry.close();
+    }
+    else
+    {
+        // if the file didn't open, print an error:
+        Serial.println("error opening test.txt");
+    }
+}
+
 char* get_next_file_name() {
     if(file_index < n_files){
+        entry.close();
         entry = root.openNextFile();
         file_index++;
     }   
@@ -589,6 +613,7 @@ char* get_prev_file_name() {
     if(file_index > 0)
         file_index--;
     for (int i = 0; i <= file_index; i++) {
+        entry.close();
         entry = root.openNextFile();
     }
     return entry.name();
@@ -625,7 +650,7 @@ void get_forward_path() {
     String forward_path;
     char buff[256];
     for (int i = 0; i < current_path_count; i++)
-        forward_path += String('/') + String(current_path[i]) + String('/');
+        forward_path += String('/') + String(current_path[i]);
     forward_path.toCharArray(buff, 256);
     Serial.println(buff);
     strcpy(global_buff,buff);
