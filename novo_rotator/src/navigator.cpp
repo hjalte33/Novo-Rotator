@@ -207,12 +207,13 @@ void draw_info_screen(){
     }
 }
 void draw_file_navigator() {
-    //programSelected = String(get_prev_file_name());
+    String printString = String(n_files) + String("   ") + String(file_index);
+    Serial.println(printString);
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.write(1);
     lcd.print("  Selecting:  ");
-    if(file_index < n_files)
+    if(file_index < n_files - 1)
         lcd.write(2);
     lcd.setCursor(0, 1);
     lcd.print(programSelected_navigator);
@@ -356,7 +357,7 @@ bool btnRightUpdate() {
             break;
         }
         case LCD_FILENAVIGATOR: {
-            if(file_index >= n_files)
+            if(file_index >= n_files - 1)
                 return false;
             programSelected_navigator = get_next_file_name();
             break;
@@ -446,12 +447,14 @@ bool btnCenterUpdate() {
             root = SD.open("/", FILE_READ);
             count_files();
             programSelected_navigator = get_next_file_name();
+            file_index = 0;
             current_path_count = 0;
             break;
         }
         case LCD_FILENAVIGATOR:{
             if (open_if_folder()) {
                 programSelected_navigator = get_next_file_name();
+                file_index = 0;
             }
             else{
                 lcdMenuState = LCD_Menu_StartStop;
@@ -469,6 +472,7 @@ bool btnCenterUpdate() {
                 root = SD.open(global_buff);
                 count_files();
                 programSelected_navigator = get_next_file_name();
+                file_index = 0;
                 current_path_count--;
             }
             break;
@@ -542,19 +546,16 @@ void SD_init(int cs) {
         lcd.print("Micro-SD failed");
         delay(2000);
     }
-    root = SD.open("/", FILE_READ);
-    count_files();
 }
 
 void count_files() {
-    root.rewindDirectory();
+    file_index = 0;
     n_files = -1;  // start at -1 to avoid off by one err.
     do {
         entry = root.openNextFile();
         n_files++;
     } while (entry);
     root.rewindDirectory();
-    file_index=0000000;
 }
 
 bool open_if_folder() {
@@ -587,7 +588,7 @@ char* get_prev_file_name() {
     root.rewindDirectory();
     if(file_index > 0)
         file_index--;
-    for (int i = 0; i < file_index; i++) {
+    for (int i = 0; i <= file_index; i++) {
         entry = root.openNextFile();
     }
     return entry.name();
@@ -624,7 +625,7 @@ void get_forward_path() {
     String forward_path;
     char buff[256];
     for (int i = 0; i < current_path_count; i++)
-        forward_path += String('/') + String(current_path[i]);
+        forward_path += String('/') + String(current_path[i]) + String('/');
     forward_path.toCharArray(buff, 256);
     Serial.println(buff);
     strcpy(global_buff,buff);
