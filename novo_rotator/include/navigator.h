@@ -15,8 +15,11 @@
 #define LCD_Menu_StartStop              1
 #define LCD_Menu_ProgramSelect          2
 #define LCD_Selected_Info               3
+#define LCD_Menu_ResumePause            4
 #define LCD_Starting                    10
 #define LCD_Stopping                    11
+#define LCD_Pausing                     12
+#define LCD_Resuming                    13
 #define LCD_ProgramSelect_Return        20
 #define LCD_ProgramSelect_P0            21
 #define LCD_ProgramSelect_Pf            22
@@ -29,10 +32,12 @@
 #define LCD_SS_Unselected 0
 #define LCD_SS_SelectedIdle 1
 #define LCD_SS_SelectedActive 2
+#define LCD_SS_SelectedPaused 3
 
 //External variables
 extern DFRobot_LCD lcd;
 extern long timeElapsed;
+extern bool grbl_listening;
 
 void lcdInit();
 void btnsInit();
@@ -45,12 +50,15 @@ void ISR_btnRightPress();
 void draw_menu_info();
 void draw_menu_program();
 void draw_menu_start_stop();
+void draw_menu_resume_pause();
 void draw_menu_select_custom();
 void draw_menu_select_file();
 void draw_info_screen();
 void draw_file_navigator();
-void draw_stating_screen();
+void draw_starting_screen();
 void draw_stopping_screen();
+void draw_pausing_screen();
+void draw_resuming_screen();
 void draw_navigator_return();
 void draw_selected_custom_rpm();
 void draw_selected_custom_time();
@@ -72,5 +80,7 @@ char* get_next_file_name();
 char* get_prev_file_name();
 void get_return_path();
 void get_forward_path();
+
+bool read_character(char &grbl_char);
 
 #endif

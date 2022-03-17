@@ -33,6 +33,8 @@ float rotations;
 unsigned long lastTick = 0;
 int tickCounter = 0;
 bool grblOkAwait = true;
+bool grbl_ready = true;
+char grbl_c;
 
 // settings
 byte rpm = 0;
@@ -218,9 +220,12 @@ void setup() {
 
 void loop() {
     ticker();
-    grbl_sync();
-
+    grbl_sync(); //TODO: needs to update the grbl_listening flag to true once the grbl is ready to receive a new command
     navigator_update();
+
+    //check grbl flag, read new character if true. Grbl flag is controlled by read_character and grbl_sync
+    if(read_character(grbl_c))
+        Serial.print(grbl_c); //TODO: send to grbl instead of serial
 
     // read tcp communication.
     // Wait for an incomming connection
