@@ -68,6 +68,9 @@ unsigned int current_path_count = 0;
 // Freq
 unsigned int lcd_curr_update_freq;
 
+// Grbl
+bool grbl_listening = false;
+
 void lcdInit() {
     // Initialize LCD
     lcd.init();
@@ -151,11 +154,34 @@ void draw_menu_start_stop() {
         lcd.write(2);
         lcd.setCursor(0, 1);
         lcd.print(programSelected);
-    } else if (lcdStartingStopping == LCD_SS_SelectedActive) {
+    } else if (lcdStartingStopping == LCD_SS_SelectedActive || lcdStartingStopping == LCD_SS_SelectedPaused) {
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.write(1);
         lcd.print("     Stop     ");
+        lcd.setCursor(0, 1);
+        lcd.print(programSelected);
+    }
+}
+void draw_menu_resume_pause()
+{
+    if (lcdStartingStopping == LCD_SS_SelectedPaused)
+    {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.write(1);
+        lcd.print("    Resume    ");
+        lcd.write(2);
+        lcd.setCursor(0, 1);
+        lcd.print(programSelected);
+    }
+    else if (lcdStartingStopping == LCD_SS_SelectedActive)
+    {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.write(1);
+        lcd.print("     Pause    ");
+        lcd.write(2);
         lcd.setCursor(0, 1);
         lcd.print(programSelected);
     }
@@ -234,6 +260,22 @@ void draw_stopping_screen() {
     lcd.setCursor(0, 1);
     lcd.print("   Program...   ");
 }
+void draw_pausing_screen(){
+    timeElapsed = -1;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("    Pausing    ");
+    lcd.setCursor(0, 1);
+    lcd.print("   Program...   ");
+}
+void draw_resuming_screen(){
+    timeElapsed = -1;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("    Resuming    ");
+    lcd.setCursor(0, 1);
+    lcd.print("   Program...   ");
+}
 void draw_navigator_return(){
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -285,8 +327,15 @@ bool btnLeftUpdate() {
     was_left_pressed = was_center_pressed = was_right_pressed = false;
 
     switch (lcdMenuState) {
-        case LCD_Menu_StartStop: {
+        case LCD_Menu_ResumePause: {
             lcdMenuState = LCD_Menu_Info;
+            break;
+        }
+        case LCD_Menu_StartStop: {
+            if (lcdStartingStopping == LCD_SS_SelectedActive || lcdStartingStopping == LCD_SS_SelectedPaused)
+                lcdMenuState = LCD_Menu_ResumePause;
+            else
+                lcdMenuState = LCD_Menu_Info;
             break;
         }
         case LCD_Menu_ProgramSelect: {
@@ -338,14 +387,21 @@ bool btnRightUpdate() {
 
     switch (lcdMenuState) {
         case LCD_Menu_Info: {
-            lcdMenuState = LCD_Menu_StartStop;
+            if(lcdStartingStopping == LCD_SS_SelectedActive || lcdStartingStopping == LCD_SS_SelectedPaused)
+                lcdMenuState = LCD_Menu_ResumePause;
+            else
+                lcdMenuState = LCD_Menu_StartStop;
             break;
         }
         case LCD_Menu_StartStop: {
-            if (lcdStartingStopping != LCD_SS_SelectedActive) {
+            if (lcdStartingStopping != LCD_SS_SelectedActive && lcdStartingStopping != LCD_SS_SelectedPaused) {
                 lcdMenuState = LCD_Menu_ProgramSelect;
             }
             else {return false;}
+            break;
+        }
+        case LCD_Menu_ResumePause: {
+            lcdMenuState = LCD_Menu_StartStop;
             break;
         }
         case LCD_ProgramSelect_Return: {
@@ -396,6 +452,23 @@ bool btnCenterUpdate() {
             lcd_curr_update_freq = INFOUPDATEFREQ;
             break;
         }
+        case LCD_Menu_ResumePause: {
+            if (lcdStartingStopping == LCD_SS_SelectedPaused) {
+                lcdMenuState = LCD_Resuming;
+                lcdStartingStopping = LCD_SS_SelectedActive;
+                lcdDisplayFlip = false;
+                lcdContinuousUpdate = true;
+                lcd_curr_update_freq = SSUPDATEFREQ;
+            }
+            else if (lcdStartingStopping == LCD_SS_SelectedActive){
+                lcdMenuState = LCD_Pausing;
+                lcdStartingStopping = LCD_SS_SelectedPaused;
+                lcdDisplayFlip = false;
+                lcdContinuousUpdate = true;
+                lcd_curr_update_freq = SSUPDATEFREQ;
+            }
+            break;
+        }
         case LCD_Menu_StartStop: {
             if (lcdStartingStopping == LCD_SS_SelectedIdle) {
                 lcdMenuState = LCD_Starting;
@@ -403,13 +476,16 @@ bool btnCenterUpdate() {
                 lcdDisplayFlip = false;
                 lcdContinuousUpdate = true;
                 lcd_curr_update_freq = SSUPDATEFREQ;
-            } else if (lcdStartingStopping == LCD_SS_SelectedActive) {
+            }
+            else if (lcdStartingStopping == LCD_SS_SelectedActive || lcdStartingStopping == LCD_SS_SelectedPaused){
                 lcdMenuState = LCD_Stopping;
                 lcdStartingStopping = LCD_SS_SelectedIdle;
                 lcdDisplayFlip = false;
                 lcdContinuousUpdate = true;
                 lcd_curr_update_freq = SSUPDATEFREQ;
-            } else return false;
+            }
+            else
+                return false;
             break;
         }
         case LCD_Menu_ProgramSelect: {
@@ -444,6 +520,7 @@ bool btnCenterUpdate() {
         }
         case LCD_ProgramSelect_Pf: {
             lcdMenuState = LCD_FILENAVIGATOR;
+            SD_init(4);
             root.close();
             entry.close();
             root = SD.open("/", FILE_READ);
@@ -460,8 +537,8 @@ bool btnCenterUpdate() {
             }
             else{
                 lcdMenuState = LCD_Menu_StartStop;
+                lcdStartingStopping = LCD_SS_SelectedIdle;
                 programSelected = programSelected_navigator;
-                read_file();
             }
             break;
         }
@@ -499,6 +576,7 @@ void navigator_update() {
 
 	switch (lcdMenuState) {
         case LCD_Menu_Info           :{draw_menu_info();break;}
+        case LCD_Menu_ResumePause    :{draw_menu_resume_pause();break;}
         case LCD_Menu_StartStop      :{draw_menu_start_stop();break;}
         case LCD_Menu_ProgramSelect  :{draw_menu_program_select();break;}
         case LCD_Selected_Info       :{draw_info_screen();break;}
@@ -507,6 +585,8 @@ void navigator_update() {
             if (update)
             {
                 draw_starting_screen();
+                //Run grbl homing potentially before starting program? Then set grbl_listening to true to start sending commands
+                grbl_listening = true;
             }
             else
             {
@@ -521,13 +601,43 @@ void navigator_update() {
         {
             if (update)
             {
-                draw_stopping_screen();
+                draw_stopping_screen(); //TODO we need to rewind the file to the top, probably reopen it in order to start from scratch
             }
             else
             {
                 lcdMenuState = LCD_Menu_StartStop;
                 lcdContinuousUpdate = false;
                 draw_menu_start_stop();
+            }
+            break;
+        }
+        case LCD_Resuming: //TODO what happens if we resume mid line? do we just keep sending chars where we left off or we have to start the line over?
+        {
+            if (update)
+            {
+                draw_resuming_screen();
+                grbl_listening = true;
+            }
+            else
+            {
+                lcdMenuState = LCD_Selected_Info;
+                lcdDisplayFlip = false;
+                lcd_curr_update_freq = INFOUPDATEFREQ;
+                draw_info_screen();
+            }
+            break;
+        }
+        case LCD_Pausing:
+        {
+            if (update)
+            {
+                draw_pausing_screen();
+            }
+            else
+            {
+                lcdMenuState = LCD_Menu_ResumePause;
+                lcdContinuousUpdate = false;
+                draw_menu_resume_pause();
             }
             break;
         }
@@ -638,8 +748,8 @@ void get_return_path() {
     }
     else
     {
-    for(int i = 0; i < current_path_count - 1; i++)
-        return_path += String('/') + String(current_path[i]);
+        for(int i = 0; i < current_path_count - 1; i++)
+            return_path += String('/') + String(current_path[i]);
     }
     return_path.toCharArray(buff,256);
     Serial.println(buff);
@@ -654,4 +764,27 @@ void get_forward_path() {
     forward_path.toCharArray(buff, 256);
     Serial.println(buff);
     strcpy(global_buff,buff);
+}
+
+bool read_character(char &grbl_char){
+    if(!grbl_listening)
+        return false;
+    if (entry)
+    {
+        // Read next character from the file
+        if (entry.available())
+        {
+            grbl_char = entry.read();
+            //If the char is \n we need to switch the flag to false as to not send a new command until grbl responds
+            if(grbl_char == '\n')
+                grbl_listening = false;
+            return true;
+        }
+    }
+    else
+    {
+        // if the file didn't open, print an error:
+        Serial.println("Error opening file.");
+        return false;
+    }
 }
