@@ -4,8 +4,6 @@
 #include <Wire.h>
 #include <stdint.h>
 #include <stdlib.h>
-
-#include "../include/grbl_talker.h"
 #include "../include/helpers.h"
 #include "../include/navigator.h"
 
@@ -34,7 +32,7 @@ unsigned long lastTick = 0;
 int tickCounter = 0;
 bool grblOkAwait = true;
 bool grbl_ready = true;
-char grbl_c;
+String grbl_line;
 
 // settings
 byte rpm = 0;
@@ -224,8 +222,8 @@ void loop() {
     navigator_update();
 
     //check grbl flag, read new character if true. Grbl flag is controlled by read_character and grbl_sync
-    if(read_character(grbl_c))
-        Serial.print(grbl_c); //TODO: send to grbl instead of serial
+    if(read_file_line(grbl_line,true))
+        Serial.print(grbl_line); //TODO: send to grbl instead of serial
 
     // read tcp communication.
     // Wait for an incomming connection

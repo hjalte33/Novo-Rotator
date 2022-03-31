@@ -69,7 +69,7 @@ unsigned int current_path_count = 0;
 unsigned int lcd_curr_update_freq;
 
 // Grbl
-bool grbl_listening = false;
+bool grbl_sendline = false;
 
 void lcdInit() {
     // Initialize LCD
@@ -586,7 +586,7 @@ void navigator_update() {
             {
                 draw_starting_screen();
                 //Run grbl homing potentially before starting program? Then set grbl_listening to true to start sending commands
-                grbl_listening = true;
+                grbl_sendline = true;
             }
             else
             {
@@ -616,7 +616,7 @@ void navigator_update() {
             if (update)
             {
                 draw_resuming_screen();
-                grbl_listening = true;
+                grbl_sendline = true;
             }
             else
             {
@@ -766,23 +766,24 @@ void get_forward_path() {
     strcpy(global_buff,buff);
 }
 
-bool read_character(char &grbl_char){
-    if(!grbl_listening)
+bool read_file_line(String &grbl_line, bool grbl_ok){
+    if(!grbl_sendline || !grbl_ok)
         return false;
-    if (entry)
-    {
-        // Read next character from the file
-        if (entry.available())
-        {
-            grbl_char = entry.read();
-            //If the char is \n we need to switch the flag to false as to not send a new command until grbl responds
-            if(grbl_char == '\n')
-                grbl_listening = false;
-            return true;
+    if (entry){
+        char grbl_char;
+        while(grbl_sendline){
+            // Read next character from the file
+            if (entry.available()){
+                grbl_char = entry.read();
+                //If the char is \n we need to switch the flag to false as to not send a new command until grbl responds
+                if(grbl_char == '\n')
+                    grbl_sendline = false;
+                grbl_line += String(grbl_char);
+            }
         }
+        return true;
     }
-    else
-    {
+    else{
         // if the file didn't open, print an error:
         Serial.println("Error opening file.");
         return false;

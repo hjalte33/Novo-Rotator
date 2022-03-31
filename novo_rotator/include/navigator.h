@@ -37,7 +37,6 @@
 //External variables
 extern DFRobot_LCD lcd;
 extern long timeElapsed;
-extern bool grbl_listening;
 
 void lcdInit();
 void btnsInit();
@@ -81,6 +80,6 @@ char* get_prev_file_name();
 void get_return_path();
 void get_forward_path();
 
-bool read_character(char &grbl_char);
+bool read_file_line(String &grbl_line, bool grbl_ok);
 
 #endif
