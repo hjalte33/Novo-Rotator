@@ -110,6 +110,7 @@ void grbl_go_home() {
     Serial1.println("$H");
     grbl_ok = false;
     delay(10);
+
     grbl_sync(); // extra call to sync to get the status update asap
 }
 

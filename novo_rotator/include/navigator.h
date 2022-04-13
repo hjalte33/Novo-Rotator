@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include "DFRobot_LCD.h"
+#include "grbl_talker.h"
 
 //Frequencies
 #define INFOUPDATEFREQ 2500 //number of milisec between LCD updates for info screen

@@ -53,6 +53,16 @@ void updateLED(int input) {
 }
 
 
+void P0(){
+    float destinationRotations = ((float)destinationTime/60)*rpm;
+    char command[16];
+    String commandString = String("G1X")+String(destinationRotations) + String("F")+String(rpm) + String('\n');
+    commandString.toCharArray(command,16);
+    Serial.println(command); 
+    Serial.println(destinationRotations);
+    grbl_write(command);
+}
+
 
 /**
  * @brief Parses a command sent to the rotator. 
@@ -139,7 +149,7 @@ bool commandParser(EthernetClient *client) {
                 case 'M':
                     switch (int_value) {
                         case 100:
-                              // M100 start program.
+                              P0();
                             break;
                         case 101:
                               // M101 stop any program running
@@ -167,13 +177,6 @@ bool commandParser(EthernetClient *client) {
 
 
 
-void P0(){
-    float destinationRotations = (destinationTimeS/60)*rpm;
-    char command[16] ;
-    sprintf(command, "G0X%.2fF%i\n",destinationRotations,rpm); 
-    grbl_write(command);
-}
-
 void ticker() {
     unsigned long nowS = millis()/1000;
     if (grbl_state == STATE_CYCLE){
@@ -193,7 +196,9 @@ void setup() {
 
     // Open serial communications with grbl and wait for port to open:
     grbl_init();
-
+    delay(1000);
+    grbl_go_home();
+    delay(1000);
     lcd.setCursor(0, 1);
     lcd.print("Ethernet        ");
     // start the Ethernet connection and the server:
@@ -221,9 +226,12 @@ void loop() {
     grbl_sync(); //TODO: needs to update the grbl_listening flag to true once the grbl is ready to receive a new command
     navigator_update();
 
+    char buf[BUF_LEN];;
     //check grbl flag, read new character if true. Grbl flag is controlled by read_character and grbl_sync
-    if(read_file_line(grbl_line,true))
-        Serial.print(grbl_line); //TODO: send to grbl instead of serial
+    if(read_file_line(grbl_line,grbl_ok)){
+        grbl_line.toCharArray(buf,BUF_LEN);
+        grbl_write(buf);
+    }
 
     // read tcp communication.
     // Wait for an incomming connection

@@ -585,7 +585,6 @@ void navigator_update() {
             if (update)
             {
                 draw_starting_screen();
-                //Run grbl homing potentially before starting program? Then set grbl_listening to true to start sending commands
                 grbl_sendline = true;
             }
             else
@@ -611,11 +610,12 @@ void navigator_update() {
             }
             break;
         }
-        case LCD_Resuming: //TODO what happens if we resume mid line? do we just keep sending chars where we left off or we have to start the line over?
+        case LCD_Resuming:
         {
             if (update)
             {
                 draw_resuming_screen();
+                grbl_write("~");
                 grbl_sendline = true;
             }
             else
@@ -632,6 +632,8 @@ void navigator_update() {
             if (update)
             {
                 draw_pausing_screen();
+                grbl_write("!");
+                grbl_sendline = false;
             }
             else
             {
@@ -776,11 +778,12 @@ bool read_file_line(String &grbl_line, bool grbl_ok){
             if (entry.available()){
                 grbl_char = entry.read();
                 //If the char is \n we need to switch the flag to false as to not send a new command until grbl responds
-                if(grbl_char == '\n')
-                    grbl_sendline = false;
+                //if(grbl_char == '\n')
+                //    grbl_sendline = false;
                 grbl_line += String(grbl_char);
             }
         }
+        Serial.println(grbl_line);
         return true;
     }
     else{
