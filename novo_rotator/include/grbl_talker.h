@@ -16,6 +16,7 @@
 extern uint8_t grbl_state;
 extern float grbl_rotations;
 extern bool grbl_ok;
+extern bool grbl_sendline;
 
 void grbl_init();
 void grbl_reset();

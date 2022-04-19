@@ -68,9 +68,6 @@ unsigned int current_path_count = 0;
 // Freq
 unsigned int lcd_curr_update_freq;
 
-// Grbl
-bool grbl_sendline = false;
-
 void lcdInit() {
     // Initialize LCD
     lcd.init();
@@ -769,6 +766,7 @@ void get_forward_path() {
 }
 
 bool read_file_line(String &grbl_line, bool grbl_ok){
+    grbl_line = String("");
     if(!grbl_sendline || !grbl_ok)
         return false;
     if (entry){
@@ -778,9 +776,9 @@ bool read_file_line(String &grbl_line, bool grbl_ok){
             if (entry.available()){
                 grbl_char = entry.read();
                 //If the char is \n we need to switch the flag to false as to not send a new command until grbl responds
-                //if(grbl_char == '\n')
-                //    grbl_sendline = false;
                 grbl_line += String(grbl_char);
+                if(grbl_char == '\n')
+                    break;
             }
         }
         Serial.println(grbl_line);

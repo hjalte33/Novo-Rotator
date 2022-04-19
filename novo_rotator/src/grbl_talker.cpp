@@ -8,6 +8,7 @@ float grbl_rotations;
 char in_buff[64];
 char out_buff[64];
 bool grbl_ok = false;
+bool grbl_sendline = false;
 
 unsigned long grbl_last_sync = 0;
 

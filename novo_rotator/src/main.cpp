@@ -11,8 +11,6 @@
 #define SD_CS 4
 #define BUF_LEN 128
 
-unsigned long destinationTimeS;
-
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
 // The IP address will be dependent on your local network:
@@ -32,14 +30,13 @@ unsigned long lastTick = 0;
 int tickCounter = 0;
 bool grblOkAwait = true;
 bool grbl_ready = true;
-String grbl_line;
+bool grbl_line_stored_flag = false;
+String grbl_line, grbl_line_stored;
 
 // settings
 byte rpm = 0;
 unsigned long destinationTime = 0;
 unsigned long consumedTime = 0;
-
-
 
 
 void updateLED(int input) {
@@ -54,12 +51,13 @@ void updateLED(int input) {
 
 
 void P0(){
-    float destinationRotations = ((float)destinationTime/60)*rpm;
+    float destinationRotations = (destinationTime/60.0)*rpm;
     char command[16];
     String commandString = String("G1X")+String(destinationRotations) + String("F")+String(rpm) + String('\n');
     commandString.toCharArray(command,16);
     Serial.println(command); 
-    Serial.println(destinationRotations);
+    Serial.println(commandString);
+    Serial.println(destinationTime);
     grbl_write(command);
 }
 
@@ -109,7 +107,14 @@ bool commandParser(EthernetClient *client) {
         if (sysCommand) {
             switch (letter) {
                 case 'A': // pass throug to grbl
+                    char in_buff[128];
                     grbl_write(&inData[++char_counter]);
+                    if (Serial1.available()) {
+                        //Serial1.readBytesUntil('\n',in_buff,64);
+                        delay(20);
+                        Serial1.readBytes(in_buff,128);
+                    }
+                    client->println(in_buff);
                     break;
                 case 'H': // Home
                     grbl_go_home();
@@ -158,6 +163,7 @@ bool commandParser(EthernetClient *client) {
                               // M110 run to idle pos where the rack can be taken out (feedrate)
                             break;
                     }
+                    break;
                 case 'E':
                     destinationTime = abs(value);
                     break;
@@ -196,9 +202,9 @@ void setup() {
 
     // Open serial communications with grbl and wait for port to open:
     grbl_init();
-    delay(1000);
-    grbl_go_home();
-    delay(1000);
+    //delay(1000);
+    //grbl_go_home();
+    //delay(1000);
     lcd.setCursor(0, 1);
     lcd.print("Ethernet        ");
     // start the Ethernet connection and the server:
@@ -226,11 +232,22 @@ void loop() {
     grbl_sync(); //TODO: needs to update the grbl_listening flag to true once the grbl is ready to receive a new command
     navigator_update();
 
-    char buf[BUF_LEN];;
+    char buf[BUF_LEN];
     //check grbl flag, read new character if true. Grbl flag is controlled by read_character and grbl_sync
-    if(read_file_line(grbl_line,grbl_ok)){
-        grbl_line.toCharArray(buf,BUF_LEN);
-        grbl_write(buf);
+    if(grbl_line_stored_flag && grbl_sendline){
+        grbl_line_stored.toCharArray(buf,BUF_LEN);
+        if(grbl_write(buf)){
+            grbl_line_stored_flag = false;
+        }
+    }
+    else{
+        if(read_file_line(grbl_line,grbl_ok)){
+            grbl_line.toCharArray(buf,BUF_LEN);
+            if(!grbl_write(buf)){
+                grbl_line_stored_flag = true;
+                grbl_line_stored = grbl_line;
+            }
+        }
     }
 
     // read tcp communication.
